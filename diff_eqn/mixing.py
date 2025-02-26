@@ -20,7 +20,6 @@ def get_S_dot_1(S):
 
 def s(t):
     S = S_initial
-    S_dot = dS_dt_initial
     for time in np.arange(0, t, delta_t):
         S += get_S_dot_1(S) * delta_t
     return S
@@ -43,7 +42,6 @@ def get_S_dot_2(S):
 
 def s_2(t):
     S = S_initial
-    S_dot = dS_dt_initial
     for time in np.arange(0, t, delta_t):
         S += get_S_dot_2(S) * delta_t
     return S
@@ -69,7 +67,6 @@ def get_S_dot_3(S, t):
 
 def s_3(t):
     S = S_initial
-    S_dot = dS_dt_initial
     for time in np.arange(0, t, delta_t):
         S += get_S_dot_3(S, time) * delta_t
     return S

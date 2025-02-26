@@ -27,7 +27,6 @@ def get_H_dot_HC_dot(t):
     return Heat_added, HC_added
 
 def T(t):
-    T_dot = dT_dt_initial
     H = Heat_initial
     HC = HC_initial
     for time in np.arange(0, t, delta_t):
