@@ -17,8 +17,8 @@ Next, y'' is substituted for v' and y' is substituted for v
 The Improved Euler method requires these equations:
     y_bar = Y_0 + h*V_0
     v_bar = V_0 + h*f(x_0, Y_0, V_0)
-    Y_1 = Y_0 + (h/2)*(f(x_0, Y_0, V_0) + f(x_0 + h, y_bar, v_bar))
-    V_1 = V_0 + (h/2)*(V_0 + V_bar)
+    Y_1 = Y_0 + (h/2)*(V_0 + v_bar)
+    V_1 = V_0 + (h/2)*(f(x_0, Y_0, V_0) + f(x_0 + h, y_bar, v_bar))
 
 Where h is the x increment
     
