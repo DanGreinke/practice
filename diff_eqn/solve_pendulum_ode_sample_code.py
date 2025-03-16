@@ -30,7 +30,7 @@ def theta(t):
     return theta
 
 
-
+print(theta(2)) # Output: -0.5623420732009209
 
 
 
