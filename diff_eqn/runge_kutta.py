@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+pd.options.display.float_format = '{:.7f}'.format
+
 """
 From Chapter 3.2 of "A First Course in Differential Equations" (1975) by Frank G. Hagin
 
@@ -15,28 +17,26 @@ with initial condition y(0) = 0.5
 
 Results should appear as follows:
 
-      x   2xy^2     Euler  Runge-Kutta
-0   0.0  0.5000  0.500000     0.500000
-1   0.1  0.5025  0.500000     0.502513
-2   0.2  0.5102  0.505000     0.510204
-3   0.3  0.5236  0.515201     0.523560
-4   0.4  0.5435  0.531127     0.543478
-5   0.5  0.5714  0.553695     0.571429
-6   0.6  0.6098  0.584352     0.609756
-7   0.7  0.6623  0.625328     0.662252
-8   0.8  0.7353  0.680073     0.735295
-9   0.9  0.8403  0.754073     0.840336
-10  1.0  1.0000  0.856426     0.999996
+  x  1/(2-x^2)    Euler  Improved Euler  Runge-Kutta
+0.0   0.500000 0.500000        0.500000     0.500000
+0.1   0.502513 0.500000        0.502500     0.502513
+0.2   0.510204 0.505000        0.510177     0.510204
+0.3   0.523560 0.515201        0.523513     0.523560
+0.4   0.543478 0.531127        0.543397     0.543478
+0.5   0.571429 0.553695        0.571284     0.571429
+0.6   0.609756 0.584352        0.609486     0.609756
+0.7   0.662252 0.625328        0.661720     0.662252
+0.8   0.735294 0.680073        0.734192     0.735295
+0.9   0.840336 0.754073        0.837895     0.840336
+1.0   1.000000 0.856426        0.994063     0.999996
 
-Note: I hard coded the array for the true values. This will break if we change delta_x from 0.1 to something else.
 """
 
 x_0 = 0
 y_0 = 0.5
-delta_x = 0.1
+delta_x = 0.05
 
-def y_dot(x,y):
-    return 2*x*pow(y,2)
+y_dot = lambda x, y: 2 * x * pow(y, 2)
 
 def Y_Euler(x):
     Y = y_0
@@ -51,7 +51,7 @@ def Y_Euler(x):
 def Y_Euler_Improved(x):
     Y = y_0
     result_list = [Y]
-    for x_i in np.arange(0, x, delta_x):
+    for x_i in np.arange(x_0, x, delta_x):
         
         Y_bar = Y + delta_x * y_dot(x_i,Y)
         
@@ -75,16 +75,22 @@ def Y_Runge_Kutta(x):
         result_list.append(Y)
     return result_list
 
+def Y_analytic_solution(x):
+    result_list = []
+    for x_i in np.arange(0, x + delta_x, delta_x):
+        result_list.append(1 / (2 - pow(x_i,2)))
+    return result_list
+
 def main(x):
     data = {
         "x": np.arange(0,1 + delta_x,delta_x),
-        "2xy^2":[0.5, 0.5025,0.5102,0.5236,0.5435,0.5714,0.6098,0.6623,0.7353,0.8403,1.0],
+        "1/(2-x^2)":Y_analytic_solution(x),
         "Euler": Y_Euler(x),
         "Improved Euler": Y_Euler_Improved(x),
         "Runge-Kutta": Y_Runge_Kutta(x)
     }
     df = pd.DataFrame(data)
-    print(df)
+    print(df.to_string(index=False))
 
 if __name__ == "__main__":
     main(1)
