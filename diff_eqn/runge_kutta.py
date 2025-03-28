@@ -4,7 +4,7 @@ import pandas as pd
 pd.options.display.float_format = '{:.7f}'.format
 
 """
-From Chapter 3.2 of "A First Course in Differential Equations" (1975) by Frank G. Hagin
+From Chapter 3.3 of "A First Course in Differential Equations" (1975) by Frank G. Hagin
 
 The chapter introduces the 4th order Runge-Kutta method for numerically solving differential equations. 
 This enables highly accurate approximations with low computation al cost.
@@ -29,6 +29,8 @@ Results should appear as follows:
 0.8000000  0.7352941 0.6800735       0.7341918    0.7352948
 0.9000000  0.8403361 0.7540735       0.8378954    0.8403365
 1.0000000  1.0000000 0.8564263       0.9940628    0.9999956
+
+See p. 146 and 147 for more details.
 
 """
 
