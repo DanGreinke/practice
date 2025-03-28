@@ -36,16 +36,29 @@ y_0 = 0.5
 delta_x = 0.1
 
 def y_dot(x,y):
-    return 2*x*y**2
+    return 2*x*pow(y,2)
 
 def Y_Euler(x):
     Y = y_0
     result_list = [Y]
     for x_i in np.arange(x_0, x, delta_x):
+        
         Y += delta_x * y_dot(x_i,Y)
+        
         result_list.append(Y)
     return result_list
-    
+
+def Y_Euler_Improved(x):
+    Y = y_0
+    result_list = [Y]
+    for x_i in np.arange(0, x, delta_x):
+        
+        Y_bar = Y + delta_x * y_dot(x_i,Y)
+        
+        Y += (1/2) * delta_x * (y_dot(x_i,Y) + y_dot(x_i + delta_x,Y_bar))
+        
+        result_list.append(Y)
+    return result_list
 
 def Y_Runge_Kutta(x):
     Y = y_0
@@ -67,6 +80,7 @@ def main(x):
         "x": np.arange(0,1 + delta_x,delta_x),
         "2xy^2":[0.5, 0.5025,0.5102,0.5236,0.5435,0.5714,0.6098,0.6623,0.7353,0.8403,1.0],
         "Euler": Y_Euler(x),
+        "Improved Euler": Y_Euler_Improved(x),
         "Runge-Kutta": Y_Runge_Kutta(x)
     }
     df = pd.DataFrame(data)
