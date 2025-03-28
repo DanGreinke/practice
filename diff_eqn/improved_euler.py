@@ -42,7 +42,7 @@ def y_dot(x,y):
 def Y_Euler(x):
     Y = y_0
     result_list = [Y]
-    for x_i in np.arange(0, x, delta_x):
+    for x_i in np.arange(x_0, x, delta_x):
         Y += delta_x * y_dot(x_i,Y)
         result_list.append(Y)
     return result_list
