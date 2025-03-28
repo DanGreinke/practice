@@ -7,7 +7,7 @@ pd.options.display.float_format = '{:.7f}'.format
 From Chapter 3.3 of "A First Course in Differential Equations" (1975) by Frank G. Hagin
 
 The chapter introduces the 4th order Runge-Kutta method for numerically solving differential equations. 
-This enables highly accurate approximations with low computation al cost.
+This enables highly accurate approximations with low computational cost.
 
 Solve:
 
