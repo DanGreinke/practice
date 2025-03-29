@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import math
+import time
 """
 From Chapter 2.9 of "A First Course in Differential Equations" (1975) by Frank G. Hagin
 
@@ -107,4 +108,7 @@ def main(x):
     print(df.to_string(index=False))
 
 if __name__ == "__main__":
+    tic = time.time()
     main(2)
+    toc = time.time()
+    print("\nElapsed time: " + str((toc - tic)*1000) + " ms")
