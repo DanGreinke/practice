@@ -38,7 +38,7 @@ cube_edges = [
 scale = 100
 angle_x = angle_y = angle_z = 0
 
-def project_shape(mask, shape):
+def project_shape(pm, shape):
     """
     Project shape onto screen
 
@@ -48,7 +48,7 @@ def project_shape(mask, shape):
         3. Transpose the resulting matrix
         4. Delete the 3rd (index 2) column (axis=1) of the resulting matrix, whih maps to the z-axis.
     """
-    return np.delete(np.transpose(np.matmul(shape,np.transpose(mask))),2,axis=1)   
+    return np.delete(np.transpose(np.matmul(shape,np.transpose(pm))),2,axis=1)   
 
 def rotate_shape(shape, theta_x, theta_y, theta_z):
     rot_x = np.array([[1, 0, 0],
