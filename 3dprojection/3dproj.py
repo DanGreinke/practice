@@ -2,23 +2,19 @@ import pygame
 import numpy as np
 from math import sin, cos
 
+"""
+What this script does is render a 3D cube in a pygame window, and the user may rotate it by pressing the WASD keys.
+
+I loosely followed along with this youtube tutorial: https://www.youtube.com/watch?v=sQDFydEtBLE
+
+Where the tutorial involved a custom function for matrix operations, I used numpy instead.
+"""
+
 WINDOW_SIZE = 800
+TICK = 60
+ROTATE_SPEED = 1 / TICK
 window = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
 clock = pygame.time.Clock()
-
-# projection_matrix = [[1, 0, 0],
-#                      [0, 1, 0],
-#                      [0, 0, 0]]
-
-# cube_points = [n for n in range(8)]
-# cube_points[0] = [[-1], [-1], [-1]]
-# cube_points[1] = [[1], [-1], [-1]]
-# cube_points[2] = [[-1], [1], [-1]]
-# cube_points[3] = [[-1], [-1], [1]]
-# cube_points[4] = [[1], [1], [-1]]
-# cube_points[5] = [[1], [-1], [1]]
-# cube_points[6] = [[-1], [1], [1]]
-# cube_points[7] = [[1], [1], [1]]
 
 projection_matrix = np.array([[1, 0, 0],
                               [0, 1, 0],
@@ -33,16 +29,22 @@ cube_points = np.array([[-1, -1, -1],
                         [1, 1, -1],
                         [1, -1, -1]])
 
+cube_edges = [
+    (0, 1), (1, 2), (2, 3), (3, 0),  # Back face
+    (4, 5), (5, 6), (6, 7), (7, 4),  # Front face
+    (0, 7), (1, 6), (2, 5), (3, 4)   # Connecting edges
+]
+
 scale = 100
 angle_x = angle_y = angle_z = 0
 
-def multiply_m(mask, shape):
+def project_shape(mask, shape):
     """
     Multiply two matrices
 
     Steps:
-        1. Transpose Matrix B -> the projection matrix
-        2. Multiply Matrix A by the transposed Matrix B
+        1. Transpose the projection matrix
+        2. Multiply the shape matrix by the transposed projection matrix
         3. Transpose the resulting matrix
         4. Delete the 3rd (index 2) column (axis=1) of the resulting matrix, whih maps to the z-axis.
     """
@@ -68,14 +70,11 @@ def connect_points(i, j, points):
     pygame.draw.line(window, (255, 255, 255), (points[i][0], points[i][1]), (points[j][0], points[j][1]))
 
 while True:
-    clock.tick(60)
+    clock.tick(TICK)
     window.fill((0, 0, 0))
-    angle_x += 0.01
-    angle_y += 0.01
-    angle_z += 0.01
 
     rotated_shape = rotate_shape(cube_points, angle_x, angle_y, angle_z)
-    projection = multiply_m(rotated_shape, projection_matrix)
+    projection = project_shape(rotated_shape, projection_matrix)
     
     points = [0 for _ in range(len(cube_points))]
     i = 0
@@ -88,13 +87,27 @@ while True:
         points[i] = (x, y)
         i += 1
 
-    
-    for i in range(len(points)):
-        connect_points(i-1, i, points)
+    for edge in cube_edges:
+        connect_points(edge[0], edge[1], points)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             print("Length of points array is: " + str(len(points)))
             pygame.quit()
             quit
-        pygame.display.update()
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_r]:
+        angle_x = angle_y = angle_z = 0
+    if keys[pygame.K_a]:
+        angle_y -= ROTATE_SPEED
+    if keys[pygame.K_d]:
+        angle_y += ROTATE_SPEED
+    if keys[pygame.K_w]:
+        angle_x += ROTATE_SPEED
+    if keys[pygame.K_s]:
+        angle_x -= ROTATE_SPEED
+    if keys[pygame.K_q]:
+        angle_z -= ROTATE_SPEED
+    if keys[pygame.K_e]:
+        angle_z += ROTATE_SPEED
+    pygame.display.update()
