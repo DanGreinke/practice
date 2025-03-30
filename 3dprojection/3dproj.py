@@ -40,7 +40,7 @@ angle_x = angle_y = angle_z = 0
 
 def project_shape(mask, shape):
     """
-    Multiply two matrices
+    Project shape onto screen
 
     Steps:
         1. Transpose the projection matrix
