@@ -9,17 +9,20 @@ I loosely followed along with this youtube tutorial: https://www.youtube.com/wat
 
 Where the tutorial involved a custom function for matrix operations, I used numpy instead.
 """
-
+scale = 100
+angle_x = angle_y = angle_z = 0
 WINDOW_SIZE = 800
 TICK = 60
 ROTATE_SPEED = 1 / TICK
 window = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
 clock = pygame.time.Clock()
 
+# Projection matrix for 3D to 2D projection
 projection_matrix = np.array([[1, 0, 0],
                               [0, 1, 0],
                               [0, 0, 0]])
 
+# Define cube points and edges
 cube_points = np.array([[-1, -1, -1],
                         [-1, 1, -1],
                         [-1, 1, 1],
@@ -35,8 +38,19 @@ cube_edges = [
     (0, 7), (1, 6), (2, 5), (3, 4)   # Connecting edges
 ]
 
-scale = 100
-angle_x = angle_y = angle_z = 0
+# Define 3D object class
+class Object_3D:
+    def __init__(self, points, edges):
+        self.points = points
+        self.edges = edges
+    def points(self):
+        return self.points
+
+    def edges(self):
+        return self.edges
+
+# Instantiate cube object
+cube = Object_3D(cube_points, cube_edges)
 
 def project_shape(pm, shape):
     """
@@ -73,10 +87,10 @@ while True:
     clock.tick(TICK)
     window.fill((0, 0, 0))
 
-    rotated_shape = rotate_shape(cube_points, angle_x, angle_y, angle_z)
+    rotated_shape = rotate_shape(cube.points, angle_x, angle_y, angle_z)
     projection = project_shape(rotated_shape, projection_matrix)
     
-    points = [0 for _ in range(len(cube_points))]
+    points = [0 for _ in range(len(cube.points))]
     i = 0
     
     for point in projection:
@@ -87,7 +101,7 @@ while True:
         points[i] = (x, y)
         i += 1
 
-    for edge in cube_edges:
+    for edge in cube.edges:
         connect_points(edge[0], edge[1], points)
 
     for event in pygame.event.get():
