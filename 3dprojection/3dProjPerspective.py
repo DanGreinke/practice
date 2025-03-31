@@ -7,9 +7,14 @@ from typing import List # enable us to specify datatype in mesh.tris
 """
 What this script does is render a 3D cube in a pygame window, and the user may rotate it by pressing the WASD keys.
 
-I loosely followed along with this youtube tutorial: https://www.youtube.com/watch?v=sQDFydEtBLE
+Implementing a slightly different take on cube rendering, based on this tutorial: https://www.youtube.com/watch?v=ih20l3pJoeU
+    - Modified the file, 3dproj.py
 
-Where the tutorial involved a custom function for matrix operations, I used numpy instead.
+Current state
+    - The cube mesh is implemented and can be rendered
+
+Next steps
+    - Change the perspective so the viewer isn't at an infinite distance.
 """
 scale = 100
 angle_x = angle_y = angle_z = 0
@@ -27,15 +32,19 @@ class vec3d:
     
 @dataclass
 class triangle:
-    p: vec3d[3]
+    p: tuple[vec3d, vec3d, vec3d]
 
 @dataclass
 class mesh:
-    tris: list[triangle]
+    tris: List[triangle]
+
+# @dataclass
+# class mat4x4:
+
 
 cube = mesh([
     # South
-    triangle([vec3d(-1.0, -1.0, -1.0), vec3d(-1.0, 1, -1), vec3d(1.0, 1.0, -1.0)]),
+    triangle([vec3d(-1.0, -1.0, -1.0), vec3d(-1.0, 1.0, -1.0), vec3d(1.0, 1.0, -1.0)]),
     triangle([vec3d(-1.0, -1.0, -1.0), vec3d(1.0, 1.0, -1.0), vec3d(1.0, -1.0, -1.0)]),
     
     # East
@@ -43,58 +52,52 @@ cube = mesh([
     triangle([vec3d(1.0, -1.0, -1.0), vec3d(1.0, 1.0, 1.0), vec3d(1.0, -1.0, 1.0)]),
 
     # North
-    triangle(vec3d(1, -1, 1), vec3d(1, 1, 1), vec3d(-1, -1, 1)),
-    triangle(vec3d(1, 1, 1), vec3d(-1, 1, 1), vec3d(-1, -1, 1)),
+    triangle([vec3d(1.0, -1.0, 1.0), vec3d(1.0, 1.0, 1.0), vec3d(-1.0, -1.0, 1.0)]),
+    triangle([vec3d(1.0, 1.0, 1.0), vec3d(-1.0, 1.0, 1.0), vec3d(-1.0, -1.0, 1.0)]),
 
     # West
-    triangle(vec3d(-1, -1, 1), vec3d(-1, 1, 1), vec3d(-1, 1, -1)),
-    triangle(vec3d(-1, -1, 1), vec3d(-1, 1, -1), vec3d(-1, -1, -1)),
+    triangle([vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, 1.0, 1.0), vec3d(-1.0, 1.0, -1.0)]),
+    triangle([vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, 1.0, -1.0), vec3d(-1.0, -1.0, -1.0)]),
 
     # Top
-    triangle(vec3d(-1, 1, -1), vec3d(-1, 1, 1), vec3d(1, 1, 1)),
-    triangle(vec3d(-1, 1, -1), vec3d(1, 1, 1), vec3d(1, 1, -1)),
+    triangle([vec3d(-1.0, 1.0, -1.0), vec3d(-1.0, 1.0, 1.0), vec3d(1.0, 1.0, 1.0)]),
+    triangle([vec3d(-1.0, 1.0, -1.0), vec3d(1.0, 1.0, 1.0), vec3d(1.0, 1.0, -1.0)]),
 
     # Bottom
-    triangle(vec3d(1, -1, 1), vec3d(-1, -1, 1), vec3d(-1, -1, -1)),
-    triangle(vec3d(1, -1, 1), vec3d(-1, -1, -1), vec3d(1, -1, -1))
+    triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0)]),
+    triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0), vec3d(1.0, -1.0, -1.0)])
     ])
 
-print(cube.tris)
-# # Projection matrix for 3D to 2D projection
-# projection_matrix = np.array([[1, 0, 0],
-#                               [0, 1, 0],
-#                               [0, 0, 0]])
+def mesh_to_nparray(mesh):
+    points = []
+    for i in range(len(cube.tris)):
+        for j in range(3):
+            #print(cube.tris[i].p[j].x, cube.tris[i].p[j].y, cube.tris[i].p[j].z)
+            points.append([cube.tris[i].p[j].x, cube.tris[i].p[j].y, cube.tris[i].p[j].z])
+    return points
 
-# # Define cube points and edges
-# cube_points = np.array([[-1, -1, -1],
-#                         [-1, 1, -1],
-#                         [-1, 1, 1],
-#                         [-1, -1, 1],
-#                         [1, -1, 1],
-#                         [1, 1, 1],
-#                         [1, 1, -1],
-#                         [1, -1, -1]])
+def vec3d_to_list(vec3d):
+    return [vec3d.x, vec3d.y, vec3d.z]
+    
+def get_triangle_edges(mesh):
+    edges = []
+    for i in range(len(cube.tris)):
+        for j in range(3):
+            edges.append((vec3d_to_list(cube.tris[i].p[j]), vec3d_to_list(cube.tris[i].p[j-1])))
+        #edges.append((i, j))
+    return edges
 
-# cube_edges = [
-#     (0, 1), (1, 2), (2, 3), (3, 0),  # Back face
-#     (4, 5), (5, 6), (6, 7), (7, 4),  # Front face
-#     (0, 7), (1, 6), (2, 5), (3, 4)   # Connecting edges
-# ]
+print(mesh_to_nparray(cube))
+print("-"*50)
+print(get_triangle_edges(cube))
 
-# Define 3D object class
-# @dataclass
-# class Object_3D:
-#     def __init__(self, points, edges):
-#         self.points = points
-#         self.edges = edges
-#     def points(self):
-#         return self.points
 
-#     def edges(self):
-#         return self.edges
 
-# # Instantiate cube object
-# cube = Object_3D(cube_points, cube_edges)
+# Projection matrix for 3D to 2D projection
+projection_matrix = np.array([[1, 0, 0],
+                              [0, 1, 0],
+                              [0, 0, 0]])
+
 
 def project_shape(pm, shape):
     """
@@ -124,29 +127,45 @@ def rotate_shape(shape, theta_x, theta_y, theta_z):
     shape = np.matmul(shape, rot_z)
     return shape
 
-def connect_points(i, j, points):
-    pygame.draw.line(window, (255, 255, 255), (points[i][0], points[i][1]), (points[j][0], points[j][1]))
+def adjust(p, scale, offset):
+    return p*scale + offset
+
+def connect_points(p_0, p_1):
+    pygame.draw.line(window, (255, 0, 0), p_0, p_1)
 
 while True:
     clock.tick(TICK)
     window.fill((0, 0, 0))
 
-    rotated_shape = rotate_shape(cube.points, angle_x, angle_y, angle_z)
-    projection = project_shape(rotated_shape, projection_matrix)
+    mesh_points = mesh_to_nparray(cube)
+    mesh_edges = get_triangle_edges(cube)
     
-    points = [0 for _ in range(len(cube.points))]
-    i = 0
-    
-    for point in projection:
-        adjust = lambda p, scale, offset: (p*scale + offset)
-        x, y = adjust(point[0], scale, WINDOW_SIZE/2), adjust(point[1], scale, WINDOW_SIZE/2)
-        pygame.draw.circle(window, (255, 0, 0), (x, y), 5)
-        
-        points[i] = (x, y)
-        i += 1
+    # Generate rotated and projected point pairs for each triangle edge
+    rotated_edges = []
+    for i in range(len(mesh_edges)):
+        rotated_point_0 = rotate_shape(mesh_edges[i][0], angle_x, angle_y, angle_z)
+        rotated_point_1 = rotate_shape(mesh_edges[i][1], angle_x, angle_y, angle_z)
+        # print(rotated_point_0)
 
-    for edge in cube.edges:
-        connect_points(edge[0], edge[1], points)
+        projected_point_0 = project_shape([rotated_point_0], projection_matrix)
+        projected_point_1 = project_shape([rotated_point_1], projection_matrix)
+        
+        rotated_edges.append((projected_point_0, projected_point_1))
+    # print("Rotated_edges: " + str(rotated_edges))
+
+    # Generate rotated and projected points for each corner of the cube
+    # rotated_shape = rotate_shape(mesh_points, angle_x, angle_y, angle_z)
+    # projection = project_shape(rotated_shape, projection_matrix)
+    
+    # for point in projection:
+    #     x, y = adjust(point[0], scale, WINDOW_SIZE/2), adjust(point[1], scale, WINDOW_SIZE/2)
+    #     pygame.draw.circle(window, (255, 0, 0), (x, y), 5)
+
+    for edge in range(len(rotated_edges)):
+        # print(rotated_edges[edge][0][0][1])
+        p_0 = adjust(rotated_edges[edge][0][0][0], scale, WINDOW_SIZE/2), adjust(rotated_edges[edge][0][0][1], scale, WINDOW_SIZE/2)
+        p_1 = adjust(rotated_edges[edge][1][0][0], scale, WINDOW_SIZE/2), adjust(rotated_edges[edge][1][0][1], scale, WINDOW_SIZE/2)
+        connect_points(p_0, p_1)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:

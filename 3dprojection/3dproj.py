@@ -81,7 +81,7 @@ def rotate_shape(shape, theta_x, theta_y, theta_z):
     return shape
 
 def connect_points(i, j, points):
-    pygame.draw.line(window, (255, 255, 255), (points[i][0], points[i][1]), (points[j][0], points[j][1]))
+    pygame.draw.line(window, (255, 0, 0), (points[i][0], points[i][1]), (points[j][0], points[j][1]))
 
 while True:
     clock.tick(TICK)
@@ -96,12 +96,12 @@ while True:
     for point in projection:
         adjust = lambda p, scale, offset: (p*scale + offset)
         x, y = adjust(point[0], scale, WINDOW_SIZE/2), adjust(point[1], scale, WINDOW_SIZE/2)
-        pygame.draw.circle(window, (255, 0, 0), (x, y), 5)
+        #pygame.draw.circle(window, (255, 0, 0), (x, y), 5)
         
         points[i] = (x, y)
         i += 1
 
-    for edge in cube.edges:
+    for edge in cube_edges:
         connect_points(edge[0], edge[1], points)
 
     for event in pygame.event.get():
