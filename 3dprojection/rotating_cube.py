@@ -15,7 +15,7 @@ Implementing a slightly different take on cube rendering, based on this tutorial
 I subbed in dataclasses for the structs in the original c++ code, used numpy for matrix multiplication, and pygame for rendering.
 In addition, I decided to hard-code the projection and rotation matrices, to make them easier to see.
 """
-scale = 200
+scale = 100
 angle_x = angle_y = angle_z = 0
 WINDOW_SIZE = 800
 TICK = 60
@@ -66,10 +66,9 @@ cube = mesh([
 # Projection Matrix
 f_near = 0.1
 f_far = 1000
-f_fov = 90
+f_fov = 20
 f_aspect_ratio = WINDOW_SIZE / WINDOW_SIZE
 f_fov_rad = 1 / tan(f_fov * 0.5 / 180.0 * math.pi)
-viewer_Camera = vec3d(0, 0, 0)
 
 def vec3d_mult_by_4x4_matrix(vec, m):
     """
@@ -118,17 +117,6 @@ def draw_triangle(x1, y1, x2, y2, x3, y3):
     pygame.draw.line(window, (255, 0, 0), (x2, y2), (x3, y3))
     pygame.draw.line(window, (255, 0, 0), (x3, y3), (x1, y1))
 
-def get_surface_normal(tri):
-    """
-    Get the surface normal of input triangle
-    """
-    line_1 = np.array([tri.p[1].x - tri.p[0].x, tri.p[1].y - tri.p[0].y, tri.p[1].z - tri.p[0].z])
-    line_2 = np.array([tri.p[2].x - tri.p[0].x, tri.p[2].y - tri.p[0].y, tri.p[2].z - tri.p[0].z])
-
-    cross_product = np.cross(line_1, line_2)
-    surface_normal = cross_product / np.linalg.norm(cross_product)
-    normal_vec = vec3d(surface_normal[0], surface_normal[1], surface_normal[2])
-    return normal_vec
 
 def rotate_triangle(tri, theta_x, theta_y, theta_z):
     #print(tri)
@@ -157,25 +145,6 @@ def rotate_triangle(tri, theta_x, theta_y, theta_z):
 def adjust(p, scale, offset):
     return p*scale + offset
 
-def check_visibility(tri, cam=viewer_Camera):
-    """
-    When we look at the edge of an object, there's a roughly 90 degree angle from the surface normal
-    our line of sight.
-
-    Here we check the visibility of a surface by:
-        1. Identify the surface normal for the triangle
-        2. Find the vector from the 0th triangle vertex to the viewer (default at [0,0,0])
-        3. Calculate the dot product b/w that surface normal vector and the line of sight vector
-        4. Values less than 0 mean that the surface is visible, and values greater than 0 mean
-           that the surface is facing away. 
-    """
-    tri_normal = get_surface_normal(tri)
-    dot_prod = np.dot([tri_normal.x, tri_normal.y, tri_normal.z], 
-                      [tri.p[0].x - cam.x, tri.p[0].y - cam.y, tri.p[0].z - cam.z]
-                    )
-    return dot_prod < 0
-    
-
 while True:
     clock.tick(TICK)
     window.fill((0, 0, 0))
@@ -186,19 +155,14 @@ while True:
     # Multiply cube points by rotation and projection matrices, then draw the cube
     for tri in cube.tris:
         rotated_triangle = rotate_triangle(tri, angle_x, angle_y, angle_z)
-        translated_triangle = translate_triangle(rotated_triangle, 0, 0, 3)
-        visible = check_visibility(translated_triangle)
+        translated_triangle = translate_triangle(rotated_triangle, 0, 0, 6)
         projected_triangle = project_triangle(translated_triangle)
-        if visible:
-            #TODO
-            # Implement rastering so we can fill the triangles
-            
-            draw_triangle(projected_triangle.p[0].x, 
-                        projected_triangle.p[0].y, 
-                        projected_triangle.p[1].x, 
-                        projected_triangle.p[1].y,
-                        projected_triangle.p[2].x,
-                        projected_triangle.p[2].y)
+        draw_triangle(projected_triangle.p[0].x, 
+                      projected_triangle.p[0].y, 
+                      projected_triangle.p[1].x, 
+                      projected_triangle.p[1].y,
+                      projected_triangle.p[2].x,
+                      projected_triangle.p[2].y)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
