@@ -69,31 +69,22 @@ f_fov = 90
 f_aspect_ratio = WINDOW_SIZE / WINDOW_SIZE
 f_fov_rad = 1 / tan(f_fov * 0.5 / 180.0 * math.pi)
 
-def mesh_to_nparray(mesh):
-    points = []
-    for i in range(len(cube.tris)):
-        for j in range(3):
-            points.append([cube.tris[i].p[j].x, cube.tris[i].p[j].y, cube.tris[i].p[j].z])
-    return points
-
-def vec3d_to_list(vec3d):
-    return [vec3d.x, vec3d.y, vec3d.z]
-
 def vec3d_mult_by_4x4_matrix(vec, m):
+    """
+    Using a 4x4 matrix to capture the perspective adjustments that are necessary
+    to make the far side of the cube appear smaller than the near side. This 
+    requires us to add a forth dimension to our vectors, and multiply them by the
+    projection matrix.
+
+    The rotation matrices have been similarly adjusted to make this function work
+    for the rotation calculations as well.
+    """
     tmp_vec = np.array([vec.x, vec.y, vec.z, 1])
     tmp_vec = np.matmul(tmp_vec, m)
 
     if tmp_vec[3] != 0:
         tmp_vec /= tmp_vec[3]
     return vec3d(tmp_vec[0], tmp_vec[1], tmp_vec[2])
-
-    
-def get_triangle_edges(mesh):
-    edges = []
-    for i in range(len(cube.tris)):
-        for j in range(3):
-            edges.append((vec3d_to_list(cube.tris[i].p[j]), vec3d_to_list(cube.tris[i].p[j-1])))
-    return edges
 
 def project_triangle(tri):
     """
@@ -153,19 +144,12 @@ def rotate_triangle(tri, theta_x, theta_y, theta_z):
 def adjust(p, scale, offset):
     return p*scale + offset
 
-def connect_points(p_0, p_1):
-    pygame.draw.line(window, (255, 0, 0), p_0, p_1)
-
-
 while True:
     clock.tick(TICK)
     window.fill((0, 0, 0))
 
+    # Multiply cube points by rotation and projection matrices, then draw the cube
     for tri in cube.tris:
-        # TODO
-        # 1. Rotate the triangle
-        # 2. Project the triangle
-        # 3. Draw the triangle
         rotated_triangle = rotate_triangle(tri, angle_x, angle_y, angle_z)
         translated_triangle = translate_triangle(rotated_triangle, 0, 0, 3)
         projected_triangle = project_triangle(translated_triangle)
