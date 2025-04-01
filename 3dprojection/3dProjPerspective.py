@@ -1,6 +1,7 @@
 import pygame
 import numpy as np
-from math import sin, cos, tan
+import math
+from math import tan, sin, cos
 from dataclasses import dataclass
 from typing import List # enable us to specify datatype in mesh.tris
 
@@ -10,11 +11,8 @@ What this script does is render a 3D cube in a pygame window, and the user may r
 Implementing a slightly different take on cube rendering, based on this tutorial: https://www.youtube.com/watch?v=ih20l3pJoeU
     - Modified the file, 3dproj.py
 
-Current state
-    - The cube mesh is implemented and can be rendered
-
-Next steps
-    - Change the perspective so the viewer isn't at an infinite distance.
+I subbed in dataclasses for the structs in the original c++ code, used numpy for matrix multiplication, and pygame for rendering.
+In addition, I decided to hard-code the projection and rotation matrices, to make them easier to see.
 """
 scale = 100
 angle_x = angle_y = angle_z = 0
@@ -37,10 +35,6 @@ class triangle:
 @dataclass
 class mesh:
     tris: List[triangle]
-
-# @dataclass
-# class mat4x4:
-
 
 cube = mesh([
     # South
@@ -68,64 +62,93 @@ cube = mesh([
     triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0), vec3d(1.0, -1.0, -1.0)])
     ])
 
+# Projection Matrix
+f_near = 0.1
+f_far = 1000
+f_fov = 90
+f_aspect_ratio = WINDOW_SIZE / WINDOW_SIZE
+f_fov_rad = 1 / tan(f_fov * 0.5 / 180.0 * math.pi)
+
 def mesh_to_nparray(mesh):
     points = []
     for i in range(len(cube.tris)):
         for j in range(3):
-            #print(cube.tris[i].p[j].x, cube.tris[i].p[j].y, cube.tris[i].p[j].z)
             points.append([cube.tris[i].p[j].x, cube.tris[i].p[j].y, cube.tris[i].p[j].z])
     return points
 
 def vec3d_to_list(vec3d):
     return [vec3d.x, vec3d.y, vec3d.z]
+
+def vec3d_mult_by_4x4_matrix(vec, m):
+    tmp_vec = np.array([vec.x, vec.y, vec.z, 1])
+    tmp_vec = np.matmul(tmp_vec, m)
+
+    if tmp_vec[3] != 0:
+        tmp_vec /= tmp_vec[3]
+    return vec3d(tmp_vec[0], tmp_vec[1], tmp_vec[2])
+
     
 def get_triangle_edges(mesh):
     edges = []
     for i in range(len(cube.tris)):
         for j in range(3):
             edges.append((vec3d_to_list(cube.tris[i].p[j]), vec3d_to_list(cube.tris[i].p[j-1])))
-        #edges.append((i, j))
     return edges
 
-print(mesh_to_nparray(cube))
-print("-"*50)
-print(get_triangle_edges(cube))
-
-
-
-# Projection matrix for 3D to 2D projection
-projection_matrix = np.array([[1, 0, 0],
-                              [0, 1, 0],
-                              [0, 0, 0]])
-
-
-def project_shape(pm, shape):
+def project_triangle(tri):
     """
-    Project shape onto screen
-
-    Steps:
-        1. Transpose the projection matrix
-        2. Multiply the shape matrix by the transposed projection matrix
-        3. Transpose the resulting matrix
-        4. Delete the 3rd (index 2) column (axis=1) of the resulting matrix, whih maps to the z-axis.
+    Project shape onto screen"
     """
-    return np.delete(np.transpose(np.matmul(shape,np.transpose(pm))),2,axis=1)   
+    projection_matrix = np.array([[f_aspect_ratio * f_fov_rad, 0,         0,                                    0],
+                                  [0,                          f_fov_rad, 0,                                    0],
+                                  [0,                          0,         f_far / (f_far - f_near),             1],
+                                  [0,                          0,         (-f_far * f_near) / (f_far - f_near), 0]
+                                ])
+    out_tri = []
+    for p in tri.p:
+        p = vec3d_mult_by_4x4_matrix(p, projection_matrix)
+        out_tri.append(p)
+    out_tri = triangle(tuple(out_tri))
+    return out_tri
 
-def rotate_shape(shape, theta_x, theta_y, theta_z):
-    rot_x = np.array([[1, 0, 0],
-            [0, np.cos(theta_x), -np.sin(theta_x)],
-            [0, np.sin(theta_x), np.cos(theta_x)]])
-    rot_y = np.array([[np.cos(theta_y), 0, np.sin(theta_y)],
-            [0, 1, 0],
-            [-np.sin(theta_y), 0, np.cos(theta_y)]])
-    rot_z = np.array([[np.cos(theta_z), -np.sin(theta_z), 0],
-            [np.sin(theta_z), np.cos(theta_z), 0],
-            [0, 0, 1]])
+def translate_triangle(tri, x_offset, y_offset, z_offset):
+    translated_tri = triangle([vec3d(tri.p[0].x + x_offset, tri.p[0].y + y_offset, tri.p[0].z + z_offset),
+                               vec3d(tri.p[1].x + x_offset, tri.p[1].y + y_offset, tri.p[1].z + z_offset),
+                               vec3d(tri.p[2].x + x_offset, tri.p[2].y + y_offset, tri.p[2].z + z_offset)])
+    return translated_tri
+
+def draw_triangle(x1, y1, x2, y2, x3, y3):
+    x1, y1 = adjust(x1, scale, WINDOW_SIZE/2), adjust(y1, scale, WINDOW_SIZE/2)
+    x2, y2 = adjust(x2, scale, WINDOW_SIZE/2), adjust(y2, scale, WINDOW_SIZE/2)
+    x3, y3 = adjust(x3, scale, WINDOW_SIZE/2), adjust(y3, scale, WINDOW_SIZE/2)
+    pygame.draw.line(window, (255, 0, 0), (x1, y1), (x2, y2))
+    pygame.draw.line(window, (255, 0, 0), (x2, y2), (x3, y3))
+    pygame.draw.line(window, (255, 0, 0), (x3, y3), (x1, y1))
+
+
+def rotate_triangle(tri, theta_x, theta_y, theta_z):
+    #print(tri)
+    rot_x = np.array([[1, 0,                0,               0],
+                      [0, np.cos(theta_x), -np.sin(theta_x), 0],
+                      [0, np.sin(theta_x),  np.cos(theta_x), 0],
+                      [0, 0,                0,               1]])
     
-    shape = np.matmul(shape, rot_x)
-    shape = np.matmul(shape, rot_y)
-    shape = np.matmul(shape, rot_z)
-    return shape
+    rot_y = np.array([[ np.cos(theta_y), 0, np.sin(theta_y), 0],
+                      [ 0,               1, 0,               0],
+                      [-np.sin(theta_y), 0, np.cos(theta_y), 0],
+                      [ 0,               0, 0,               1]])
+    
+    rot_z = np.array([[np.cos(theta_z), -np.sin(theta_z), 0, 0],
+                      [np.sin(theta_z),  np.cos(theta_z), 0, 0],
+                      [0,                0,               1, 0],
+                      [0,                0,               0, 1]])
+    rotated_points = []
+    for p in tri.p:
+        p = vec3d_mult_by_4x4_matrix(p, rot_x)
+        p = vec3d_mult_by_4x4_matrix(p, rot_y)
+        p = vec3d_mult_by_4x4_matrix(p, rot_z)
+        rotated_points.append(p)
+    return triangle(tuple(rotated_points))
 
 def adjust(p, scale, offset):
     return p*scale + offset
@@ -133,43 +156,29 @@ def adjust(p, scale, offset):
 def connect_points(p_0, p_1):
     pygame.draw.line(window, (255, 0, 0), p_0, p_1)
 
+
 while True:
     clock.tick(TICK)
     window.fill((0, 0, 0))
 
-    mesh_points = mesh_to_nparray(cube)
-    mesh_edges = get_triangle_edges(cube)
-    
-    # Generate rotated and projected point pairs for each triangle edge
-    rotated_edges = []
-    for i in range(len(mesh_edges)):
-        rotated_point_0 = rotate_shape(mesh_edges[i][0], angle_x, angle_y, angle_z)
-        rotated_point_1 = rotate_shape(mesh_edges[i][1], angle_x, angle_y, angle_z)
-        # print(rotated_point_0)
-
-        projected_point_0 = project_shape([rotated_point_0], projection_matrix)
-        projected_point_1 = project_shape([rotated_point_1], projection_matrix)
-        
-        rotated_edges.append((projected_point_0, projected_point_1))
-    # print("Rotated_edges: " + str(rotated_edges))
-
-    # Generate rotated and projected points for each corner of the cube
-    # rotated_shape = rotate_shape(mesh_points, angle_x, angle_y, angle_z)
-    # projection = project_shape(rotated_shape, projection_matrix)
-    
-    # for point in projection:
-    #     x, y = adjust(point[0], scale, WINDOW_SIZE/2), adjust(point[1], scale, WINDOW_SIZE/2)
-    #     pygame.draw.circle(window, (255, 0, 0), (x, y), 5)
-
-    for edge in range(len(rotated_edges)):
-        # print(rotated_edges[edge][0][0][1])
-        p_0 = adjust(rotated_edges[edge][0][0][0], scale, WINDOW_SIZE/2), adjust(rotated_edges[edge][0][0][1], scale, WINDOW_SIZE/2)
-        p_1 = adjust(rotated_edges[edge][1][0][0], scale, WINDOW_SIZE/2), adjust(rotated_edges[edge][1][0][1], scale, WINDOW_SIZE/2)
-        connect_points(p_0, p_1)
+    for tri in cube.tris:
+        # TODO
+        # 1. Rotate the triangle
+        # 2. Project the triangle
+        # 3. Draw the triangle
+        rotated_triangle = rotate_triangle(tri, angle_x, angle_y, angle_z)
+        translated_triangle = translate_triangle(rotated_triangle, 0, 0, 3)
+        projected_triangle = project_triangle(translated_triangle)
+        draw_triangle(projected_triangle.p[0].x, 
+                      projected_triangle.p[0].y, 
+                      projected_triangle.p[1].x, 
+                      projected_triangle.p[1].y,
+                      projected_triangle.p[2].x,
+                      projected_triangle.p[2].y)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            print("Length of points array is: " + str(len(points)))
+            #print("Length of points array is: " + str(len(points)))
             pygame.quit()
             quit
     keys = pygame.key.get_pressed()
