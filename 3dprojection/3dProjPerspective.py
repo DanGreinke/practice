@@ -114,9 +114,15 @@ def draw_triangle(x1, y1, x2, y2, x3, y3):
     x1, y1 = adjust(x1, scale, WINDOW_SIZE/2), adjust(y1, scale, WINDOW_SIZE/2)
     x2, y2 = adjust(x2, scale, WINDOW_SIZE/2), adjust(y2, scale, WINDOW_SIZE/2)
     x3, y3 = adjust(x3, scale, WINDOW_SIZE/2), adjust(y3, scale, WINDOW_SIZE/2)
-    pygame.draw.line(window, (255, 0, 0), (x1, y1), (x2, y2))
-    pygame.draw.line(window, (255, 0, 0), (x2, y2), (x3, y3))
-    pygame.draw.line(window, (255, 0, 0), (x3, y3), (x1, y1))
+    pygame.draw.line(window, (255, 255, 0), (x1, y1), (x2, y2))
+    pygame.draw.line(window, (255, 255, 0), (x2, y2), (x3, y3))
+    pygame.draw.line(window, (255, 255, 0), (x3, y3), (x1, y1))
+
+def draw_polygon(x1, y1, x2, y2, x3, y3):
+    x1, y1 = adjust(x1, scale, WINDOW_SIZE/2), adjust(y1, scale, WINDOW_SIZE/2)
+    x2, y2 = adjust(x2, scale, WINDOW_SIZE/2), adjust(y2, scale, WINDOW_SIZE/2)
+    x3, y3 = adjust(x3, scale, WINDOW_SIZE/2), adjust(y3, scale, WINDOW_SIZE/2)
+    pygame.draw.polygon(window, (255, 0, 0), [(x1, y1), (x2, y2), (x3, y3)])
 
 def get_surface_normal(tri):
     """
@@ -190,15 +196,15 @@ while True:
         visible = check_visibility(translated_triangle)
         projected_triangle = project_triangle(translated_triangle)
         if visible:
-            #TODO
-            # Implement rastering so we can fill the triangles
-            
-            draw_triangle(projected_triangle.p[0].x, 
-                        projected_triangle.p[0].y, 
-                        projected_triangle.p[1].x, 
-                        projected_triangle.p[1].y,
-                        projected_triangle.p[2].x,
-                        projected_triangle.p[2].y)
+            draw_polygon(projected_triangle.p[0].x, projected_triangle.p[0].y, 
+                         projected_triangle.p[1].x, projected_triangle.p[1].y, 
+                         projected_triangle.p[2].x, projected_triangle.p[2].y)
+            # draw_triangle(projected_triangle.p[0].x, 
+            #             projected_triangle.p[0].y, 
+            #             projected_triangle.p[1].x, 
+            #             projected_triangle.p[1].y,
+            #             projected_triangle.p[2].x,
+            #             projected_triangle.p[2].y)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
