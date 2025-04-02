@@ -15,14 +15,9 @@ Implementing a slightly different take on cube rendering, based on this tutorial
 I subbed in dataclasses for the structs in the original c++ code, used numpy for matrix multiplication, and pygame for rendering.
 In addition, I decided to hard-code the projection and rotation matrices, to make them easier to see.
 """
-scale = 200
-angle_x = angle_y = angle_z = 0
-WINDOW_SIZE = 800
-TICK = 60
-ROTATE_SPEED = 1 / TICK
-window = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
-clock = pygame.time.Clock()
 
+
+# Define data structures to support my "3D Engine"
 @dataclass
 class vec3d:
     x: float
@@ -63,13 +58,22 @@ cube = mesh([
     triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0), vec3d(1.0, -1.0, -1.0)])
     ])
 
-# Projection Matrix
+# Declare global variables
 f_near = 0.1
 f_far = 1000
 f_fov = 90
-f_aspect_ratio = WINDOW_SIZE / WINDOW_SIZE
 f_fov_rad = 1 / tan(f_fov * 0.5 / 180.0 * math.pi)
 viewer_Camera = vec3d(0, 0, 0)
+light_direction = vec3d(0, 0, -1)
+light_color = vec3d(255, 0, 0)
+scale = 200
+angle_x = angle_y = angle_z = 0
+WINDOW_SIZE = 800
+f_aspect_ratio = WINDOW_SIZE / WINDOW_SIZE
+TICK = 60
+ROTATE_SPEED = 1 / TICK
+window = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
+clock = pygame.time.Clock()
 
 def vec3d_mult_by_4x4_matrix(vec, m):
     """
@@ -118,11 +122,12 @@ def draw_triangle(x1, y1, x2, y2, x3, y3):
     pygame.draw.line(window, (255, 255, 0), (x2, y2), (x3, y3))
     pygame.draw.line(window, (255, 255, 0), (x3, y3), (x1, y1))
 
-def draw_polygon(x1, y1, x2, y2, x3, y3):
+def draw_polygon(x1, y1, x2, y2, x3, y3, color):
+    r, g, b = abs(round(color.x)), abs(round(color.y)), abs(round(color.z))
     x1, y1 = adjust(x1, scale, WINDOW_SIZE/2), adjust(y1, scale, WINDOW_SIZE/2)
     x2, y2 = adjust(x2, scale, WINDOW_SIZE/2), adjust(y2, scale, WINDOW_SIZE/2)
     x3, y3 = adjust(x3, scale, WINDOW_SIZE/2), adjust(y3, scale, WINDOW_SIZE/2)
-    pygame.draw.polygon(window, (255, 0, 0), [(x1, y1), (x2, y2), (x3, y3)])
+    pygame.draw.polygon(window, (r, g, b), [(x1, y1), (x2, y2), (x3, y3)])
 
 def get_surface_normal(tri):
     """
@@ -179,8 +184,18 @@ def check_visibility(tri, cam=viewer_Camera):
     dot_prod = np.dot([tri_normal.x, tri_normal.y, tri_normal.z], 
                       [tri.p[0].x - cam.x, tri.p[0].y - cam.y, tri.p[0].z - cam.z]
                     )
-    return dot_prod < 0
-    
+    # print(dot_prod)
+    return dot_prod < 0, tri_normal
+
+def illuminate_triangle(light_vec, tri_normal):
+    # print(tri_normal)
+    l = math.sqrt(light_vec.x**2 + light_vec.y**2 + light_vec.z**2)
+    normalized_light_vec = vec3d(light_vec.x/l, light_vec.y/l, light_vec.z/l)
+
+    dp = np.dot([normalized_light_vec.x, normalized_light_vec.y, normalized_light_vec.z],
+                [tri_normal.x, tri_normal.y, tri_normal.z])
+    # print(dp)
+    return dp
 
 while True:
     clock.tick(TICK)
@@ -193,12 +208,22 @@ while True:
     for tri in cube.tris:
         rotated_triangle = rotate_triangle(tri, angle_x, angle_y, angle_z)
         translated_triangle = translate_triangle(rotated_triangle, 0, 0, 3)
-        visible = check_visibility(translated_triangle)
+        # I'm grabbing the tri-normal opportunistically here because it's calculated while checking visibility
+        # The tri-normal is also needed for illumination.
+        visible, tri_normal = check_visibility(translated_triangle) 
         projected_triangle = project_triangle(translated_triangle)
         if visible:
+            # Compute Illumination for triangles
+            illumination = illuminate_triangle(light_direction, tri_normal)
+            tri_color = vec3d(light_color.x * illumination, light_color.y * illumination, light_color.z * illumination)
+
+            # Fill in triangles
             draw_polygon(projected_triangle.p[0].x, projected_triangle.p[0].y, 
                          projected_triangle.p[1].x, projected_triangle.p[1].y, 
-                         projected_triangle.p[2].x, projected_triangle.p[2].y)
+                         projected_triangle.p[2].x, projected_triangle.p[2].y,
+                         tri_color)
+
+            # Draw triangle edges
             # draw_triangle(projected_triangle.p[0].x, 
             #             projected_triangle.p[0].y, 
             #             projected_triangle.p[1].x, 
