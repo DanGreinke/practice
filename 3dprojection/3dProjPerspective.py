@@ -4,6 +4,8 @@ import math
 from math import tan, sin, cos
 from dataclasses import dataclass
 from typing import List # enable us to specify datatype in mesh.tris
+# import os
+from pathlib import Path
 
 """
 What this script does is render a 3D cube in a pygame window, and the user may rotate it by pressing the WASD keys.
@@ -32,33 +34,36 @@ class triangle:
 class mesh:
     tris: List[triangle]
 
-cube = mesh([
-    # South
-    triangle([vec3d(-1.0, -1.0, -1.0), vec3d(-1.0, 1.0, -1.0), vec3d(1.0, 1.0, -1.0)]),
-    triangle([vec3d(-1.0, -1.0, -1.0), vec3d(1.0, 1.0, -1.0), vec3d(1.0, -1.0, -1.0)]),
+# cube = mesh([
+#     # South
+#     triangle([vec3d(-1.0, -1.0, -1.0), vec3d(-1.0, 1.0, -1.0), vec3d(1.0, 1.0, -1.0)]),
+#     triangle([vec3d(-1.0, -1.0, -1.0), vec3d(1.0, 1.0, -1.0), vec3d(1.0, -1.0, -1.0)]),
     
-    # East
-    triangle([vec3d(1.0, -1.0, -1.0), vec3d(1.0, 1.0, -1.0), vec3d(1.0, 1.0, 1.0)]),
-    triangle([vec3d(1.0, -1.0, -1.0), vec3d(1.0, 1.0, 1.0), vec3d(1.0, -1.0, 1.0)]),
+#     # East
+#     triangle([vec3d(1.0, -1.0, -1.0), vec3d(1.0, 1.0, -1.0), vec3d(1.0, 1.0, 1.0)]),
+#     triangle([vec3d(1.0, -1.0, -1.0), vec3d(1.0, 1.0, 1.0), vec3d(1.0, -1.0, 1.0)]),
 
-    # North
-    triangle([vec3d(1.0, -1.0, 1.0), vec3d(1.0, 1.0, 1.0), vec3d(-1.0, -1.0, 1.0)]),
-    triangle([vec3d(1.0, 1.0, 1.0), vec3d(-1.0, 1.0, 1.0), vec3d(-1.0, -1.0, 1.0)]),
+#     # North
+#     triangle([vec3d(1.0, -1.0, 1.0), vec3d(1.0, 1.0, 1.0), vec3d(-1.0, -1.0, 1.0)]),
+#     triangle([vec3d(1.0, 1.0, 1.0), vec3d(-1.0, 1.0, 1.0), vec3d(-1.0, -1.0, 1.0)]),
 
-    # West
-    triangle([vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, 1.0, 1.0), vec3d(-1.0, 1.0, -1.0)]),
-    triangle([vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, 1.0, -1.0), vec3d(-1.0, -1.0, -1.0)]),
+#     # West
+#     triangle([vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, 1.0, 1.0), vec3d(-1.0, 1.0, -1.0)]),
+#     triangle([vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, 1.0, -1.0), vec3d(-1.0, -1.0, -1.0)]),
 
-    # Top
-    triangle([vec3d(-1.0, 1.0, -1.0), vec3d(-1.0, 1.0, 1.0), vec3d(1.0, 1.0, 1.0)]),
-    triangle([vec3d(-1.0, 1.0, -1.0), vec3d(1.0, 1.0, 1.0), vec3d(1.0, 1.0, -1.0)]),
+#     # Top
+#     triangle([vec3d(-1.0, 1.0, -1.0), vec3d(-1.0, 1.0, 1.0), vec3d(1.0, 1.0, 1.0)]),
+#     triangle([vec3d(-1.0, 1.0, -1.0), vec3d(1.0, 1.0, 1.0), vec3d(1.0, 1.0, -1.0)]),
 
-    # Bottom
-    triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0)]),
-    triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0), vec3d(1.0, -1.0, -1.0)])
-    ])
+#     # Bottom
+#     triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0)]),
+#     triangle([vec3d(1.0, -1.0, 1.0), vec3d(-1.0, -1.0, -1.0), vec3d(1.0, -1.0, -1.0)])
+#     ])
+# print(cube)
+
 
 # Declare global variables
+obj_distance = 8
 f_near = 0.1
 f_far = 1000
 f_fov = 90
@@ -74,6 +79,36 @@ TICK = 60
 ROTATE_SPEED = 1 / TICK
 window = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
 clock = pygame.time.Clock()
+
+def load_obj(obj_file):
+    p = Path(__file__).with_name(obj_file)
+    vectors = []
+    triangles = []
+    out_tris = []
+    # print(p)
+    with open(obj_file, 'r') as f:
+        lines = f.readlines()
+        for l in range(len(lines)):
+            if lines[l].startswith('v'):
+                vec = vec3d(float(lines[l].split()[1]), 
+                            float(lines[l].split()[2]), 
+                            float(lines[l].split()[3]))
+                vectors.append(vec)
+            elif lines[l].startswith('f'):
+                tri_indices = (int(lines[l].split()[1]) - 1, 
+                               int(lines[l].split()[2]) - 1, 
+                               int(lines[l].split()[3]) - 1)
+                # print(tri_indices)
+                triangles.append(tri_indices)
+        for t in range(len(triangles)):
+            i1,i2,i3 = triangles[t]
+            tri = triangle((vectors[i1], vectors[i2], vectors[i3]))
+            out_tris.append(tri)
+    return mesh(out_tris)
+
+    # print(vectors)
+cube = load_obj("teapot.obj") # "Cube"
+# exit()      
 
 def vec3d_mult_by_4x4_matrix(vec, m):
     """
@@ -207,14 +242,14 @@ while True:
     # Multiply cube points by rotation and projection matrices, then draw the cube
     for tri in cube.tris:
         rotated_triangle = rotate_triangle(tri, angle_x, angle_y, angle_z)
-        translated_triangle = translate_triangle(rotated_triangle, 0, 0, 3)
+        translated_triangle = translate_triangle(rotated_triangle, 0, 0, obj_distance)
         # I'm grabbing the tri-normal opportunistically here because it's calculated while checking visibility
         # The tri-normal is also needed for illumination.
         visible, tri_normal = check_visibility(translated_triangle) 
         projected_triangle = project_triangle(translated_triangle)
         if visible:
             # Compute Illumination for triangles
-            illumination = illuminate_triangle(light_direction, tri_normal)
+            illumination = illuminate_triangle(light_direction, tri_normal) 
             tri_color = vec3d(light_color.x * illumination, light_color.y * illumination, light_color.z * illumination)
 
             # Fill in triangles
