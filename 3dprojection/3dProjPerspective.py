@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import List # enable us to specify datatype in mesh.tris
 # import os
 from pathlib import Path
-
+from pprint import pprint
 """
 What this script does is render a 3D cube in a pygame window, and the user may rotate it by pressing the WASD keys.
 
@@ -29,6 +29,7 @@ class vec3d:
 @dataclass
 class triangle:
     p: tuple[vec3d, vec3d, vec3d]
+    c: vec3d = vec3d(0, 0, 0)
 
 @dataclass
 class mesh:
@@ -82,6 +83,7 @@ clock = pygame.time.Clock()
 
 def load_obj(obj_file):
     p = Path(__file__).with_name(obj_file)
+    print(p)
     vectors = []
     triangles = []
     out_tris = []
@@ -107,7 +109,7 @@ def load_obj(obj_file):
     return mesh(out_tris)
 
     # print(vectors)
-cube = load_obj("teapot.obj") # "Cube"
+cube = load_obj("VideoShip.obj") # "Cube"
 # exit()      
 
 def vec3d_mult_by_4x4_matrix(vec, m):
@@ -158,7 +160,9 @@ def draw_triangle(x1, y1, x2, y2, x3, y3):
     pygame.draw.line(window, (255, 255, 0), (x3, y3), (x1, y1))
 
 def draw_polygon(x1, y1, x2, y2, x3, y3, color):
+    # print(color)
     r, g, b = abs(round(color.x)), abs(round(color.y)), abs(round(color.z))
+    # print(r,g,b)
     x1, y1 = adjust(x1, scale, WINDOW_SIZE/2), adjust(y1, scale, WINDOW_SIZE/2)
     x2, y2 = adjust(x2, scale, WINDOW_SIZE/2), adjust(y2, scale, WINDOW_SIZE/2)
     x3, y3 = adjust(x3, scale, WINDOW_SIZE/2), adjust(y3, scale, WINDOW_SIZE/2)
@@ -203,6 +207,12 @@ def rotate_triangle(tri, theta_x, theta_y, theta_z):
 def adjust(p, scale, offset):
     return p*scale + offset
 
+def tri_depth(tri):
+    """
+    Get the average depth of a triangle
+    """
+    return (tri.p[0].z + tri.p[1].z + tri.p[2].z) / 3.0
+
 def check_visibility(tri, cam=viewer_Camera):
     """
     When we look at the edge of an object, there's a roughly 90 degree angle from the surface normal
@@ -240,6 +250,8 @@ while True:
     angle_z += ROTATE_SPEED * 0.5
 
     # Multiply cube points by rotation and projection matrices, then draw the cube
+    triangles_to_raster = []
+
     for tri in cube.tris:
         rotated_triangle = rotate_triangle(tri, angle_x, angle_y, angle_z)
         translated_triangle = translate_triangle(rotated_triangle, 0, 0, obj_distance)
@@ -247,24 +259,36 @@ while True:
         # The tri-normal is also needed for illumination.
         visible, tri_normal = check_visibility(translated_triangle) 
         projected_triangle = project_triangle(translated_triangle)
+        # print(projected_triangle)
         if visible:
             # Compute Illumination for triangles
             illumination = illuminate_triangle(light_direction, tri_normal) 
-            tri_color = vec3d(light_color.x * illumination, light_color.y * illumination, light_color.z * illumination)
+            projected_triangle.c = vec3d(light_color.x * illumination, light_color.y * illumination, light_color.z * illumination)
+            # print(projected_triangle.c)
+            # Store triangles for sorting
+            triangles_to_raster.append(projected_triangle)
+    
+    
+    triangles_to_raster.sort(key=tri_depth, reverse=True)
+    # triangles_to_raster = mesh(triangles_to_raster)
+    # print(triangles_to_raster)
+    # exit()
 
-            # Fill in triangles
-            draw_polygon(projected_triangle.p[0].x, projected_triangle.p[0].y, 
-                         projected_triangle.p[1].x, projected_triangle.p[1].y, 
-                         projected_triangle.p[2].x, projected_triangle.p[2].y,
-                         tri_color)
-
-            # Draw triangle edges
-            # draw_triangle(projected_triangle.p[0].x, 
-            #             projected_triangle.p[0].y, 
-            #             projected_triangle.p[1].x, 
-            #             projected_triangle.p[1].y,
-            #             projected_triangle.p[2].x,
-            #             projected_triangle.p[2].y)
+    for tri in triangles_to_raster:
+        # print(tri)
+        # Fill in triangles
+        draw_polygon(tri.p[0].x, tri.p[0].y, 
+                     tri.p[1].x, tri.p[1].y, 
+                     tri.p[2].x, tri.p[2].y,
+                     tri.c)
+        # print(tri)
+        # Draw triangle edges
+        # draw_triangle(projected_triangle.p[0].x, 
+        #             projected_triangle.p[0].y, 
+        #             projected_triangle.p[1].x, 
+        #             projected_triangle.p[1].y,
+        #             projected_triangle.p[2].x,
+        #             projected_triangle.p[2].y)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
