@@ -16,6 +16,8 @@ Implementing a slightly different take on cube rendering, based on this tutorial
 
 I subbed in dataclasses for the structs in the original c++ code, used numpy for matrix multiplication, and pygame for rendering.
 In addition, I decided to hard-code the projection and rotation matrices, to make them easier to see.
+
+Note: I decided to get Gemini to help vibecode a version of this in C, 3dRenderer.c, because this one hits 5 fps with the teapot.obj file.
 """
 
 
