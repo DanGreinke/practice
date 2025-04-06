@@ -78,16 +78,15 @@ const float f_fov = 90.0f;          // Field of view in degrees
 const float f_aspect_ratio = 1.0f;  // Aspect ratio (width/height)
 float f_fov_rad;                    // Field of view in radians
 vec3d viewer_Camera = {0.0f, 0.0f, 0.0f, 1.0f}; // Camera position
+vec3d v_look_dir;
 vec3d light_direction = {0.0f, 0.0f, -1.0f, 1.0f}; // Direction of the light source
-vec3d light_color = {255.0f, 0.0f, 0.0f, 1.0f}; // Color of the light source
+vec3d light_color = {255.0f, 255.0f, 255.0f, 1.0f}; // Color of the light source
 const float scale = 200.0f;         // Scaling factor for rendering
 float angle_x = 0.0f, angle_y = 0.0f, angle_z = 0.0f; // Rotation angles
 const int WINDOW_SIZE = 800;        // Size of the window
 const float TICK = 60.0f;           // Target frames per second
 const float ROTATE_SPEED = 1.0f / TICK; // Rotation speed per frame
 const float obj_distance = 8.0f;    // Distance of the object from the camera
-
-
 
 // Function to multiply a vector by a 4x4 matrix
 vec3d vec3d_mult_by_mat4x4(vec3d vec, mat4x4 m) {
@@ -212,8 +211,8 @@ triangle tri_div_by_w(triangle tri) {
 triangle project_triangle(triangle tri) {
     // Define the projection matrix
     mat4x4 projection_matrix;
-    projection_matrix.m[0][0] = f_aspect_ratio * f_fov_rad; projection_matrix.m[0][1] = 0; projection_matrix.m[0][2] = 0; projection_matrix.m[0][3] = 0;
-    projection_matrix.m[1][0] = 0; projection_matrix.m[1][1] = f_fov_rad; projection_matrix.m[1][2] = 0; projection_matrix.m[1][3] = 0;
+    projection_matrix.m[0][0] = -f_aspect_ratio * f_fov_rad; projection_matrix.m[0][1] = 0; projection_matrix.m[0][2] = 0; projection_matrix.m[0][3] = 0; // inverting x axis
+    projection_matrix.m[1][0] = 0; projection_matrix.m[1][1] = -f_fov_rad; projection_matrix.m[1][2] = 0; projection_matrix.m[1][3] = 0; // inverting y axis
     projection_matrix.m[2][0] = 0; projection_matrix.m[2][1] = 0; projection_matrix.m[2][2] = f_far / (f_far - f_near); projection_matrix.m[2][3] = 1;
     projection_matrix.m[3][0] = 0; projection_matrix.m[3][1] = 0; projection_matrix.m[3][2] = (-f_far * f_near) / (f_far - f_near); projection_matrix.m[3][3] = 0;
     triangle projected_tri;
@@ -470,6 +469,27 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+        // Create rotation and translation matrices
+        mat4x4 rotation_matrix;
+        mat4x4 translation_matrix;
+        mat4x4 world_matrix;
+        mat4x4 camera_rotation_matrix;
+
+        make_rotation_matrix(angle_x, angle_y, angle_z, &rotation_matrix);
+        make_translation_matrix(0, 0, obj_distance, &translation_matrix);
+
+        world_matrix = mat4x4_mult_by_mat4x4(rotation_matrix, translation_matrix);
+
+        // Create Point At matrix for the camera
+        // vec3d v_look_dir = {0, 0, 1};
+        vec3d v_up = {0, 1, 0};
+        vec3d v_target = {0, 0, 1};
+        make_rotation_matrix(angle_x, angle_y, angle_z, &camera_rotation_matrix);
+        vec3d v_look_dir = vec3d_mult_by_mat4x4(v_target, camera_rotation_matrix);
+        // vec3d v_target = vec3d_add(viewer_Camera, v_look_dir);
+        mat4x4 camera_matrix = matrix_point_at(viewer_Camera, v_target, v_up);
+        // Invert the camera matrix
+        mat4x4 view_matrix = Matrix_QuickInverse(camera_matrix);  
 
         // Camera Movement
         float camera_speed = 8.0f; // Adjust this for faster/slower movement
@@ -481,18 +501,36 @@ int main(int argc, char* argv[]) {
         if (GetKey(SDLK_s)) {
             viewer_Camera.z -= camera_speed * fElapsedTime; // Move backward
         }
-        if (GetKey(SDLK_a)) {
-            viewer_Camera.x -= camera_speed * fElapsedTime; // Move left
+
+        vec3d vector_forward = vec3d_mult(v_look_dir, 8.0f * fElapsedTime);
+
+		if (GetKey(SDLK_w)) {
+			viewer_Camera = vec3d_add(viewer_Camera, vector_forward);
+		}
+
+		if (GetKey(SDLK_s)) {
+			viewer_Camera = vec3d_sub(viewer_Camera, vector_forward);
+		}
+
+		if (GetKey(SDLK_a)) {
+            angle_y -= 2.0f * fElapsedTime;
         }
-        if (GetKey(SDLK_d)) {
-            viewer_Camera.x += camera_speed * fElapsedTime; // Move right
+
+		if (GetKey(SDLK_d)) {
+			angle_y += 2.0f * fElapsedTime;
         }
-        if (GetKey(SDLK_r)) {
-            viewer_Camera.y += camera_speed * fElapsedTime; // Move up
-        }
-        if (GetKey(SDLK_f)) {
-            viewer_Camera.y -= camera_speed * fElapsedTime; // Move down
-        }
+        // if (GetKey(SDLK_a)) {
+        //     viewer_Camera.x += camera_speed * fElapsedTime; // Move left; opposite what you'd expect because I inverted the axis
+        // }
+        // if (GetKey(SDLK_d)) {
+        //     viewer_Camera.x -= camera_speed * fElapsedTime; // Move right; opposite what you'd expect because I inverted the axis
+        // }
+        // if (GetKey(SDLK_r)) {
+        //     viewer_Camera.y += camera_speed * fElapsedTime; // Move up
+        // }
+        // if (GetKey(SDLK_f)) {
+        //     viewer_Camera.y -= camera_speed * fElapsedTime; // Move down
+        // }
         // if (GetKey(SDLK_LEFT)) {
         //     angle_y -= ROTATE_SPEED; // Rotate left
         // }
@@ -505,23 +543,7 @@ int main(int argc, char* argv[]) {
         // angle_y += ROTATE_SPEED * 0.3f;
         // angle_z += ROTATE_SPEED * 0.5f;
 
-        // Create rotation and translation matrices
-        mat4x4 rotation_matrix;
-        mat4x4 translation_matrix;
-        mat4x4 world_matrix;
-
-        make_rotation_matrix(angle_x, angle_y, angle_z, &rotation_matrix);
-        make_translation_matrix(0, 0, obj_distance, &translation_matrix);
-
-        world_matrix = mat4x4_mult_by_mat4x4(rotation_matrix, translation_matrix);
-
-        // Create Point At matrix for the camera
-        vec3d v_look_dir = {0, 0, 1};
-        vec3d v_up = {0, 1, 0};
-        vec3d v_target = vec3d_add(viewer_Camera, v_look_dir);
-        mat4x4 camera_matrix = matrix_point_at(viewer_Camera, v_target, v_up);
-        // Invert the camera matrix
-        mat4x4 view_matrix = Matrix_QuickInverse(camera_matrix);    
+  
 
         // Allocate memory for triangles to raster
         triangle* triangles_to_raster = (triangle*)malloc(cube.num_tris * sizeof(triangle));
