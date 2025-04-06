@@ -8,8 +8,12 @@
 // This code is a simple 3D renderer using SDL2 in C.
 
 // Simple 3D vector structure
+// x, y, z coordinates, w for homogeneous coordinates
 typedef struct {
-    float x, y, z, w; // x, y, z coordinates, w for homogeneous coordinates
+    float x;
+    float y;
+    float z;
+    float w;
 } vec3d;
 
 // Triangle structure
@@ -23,6 +27,49 @@ typedef struct {
     triangle* tris; // Array of triangles
     int num_tris;   // Number of triangles in the mesh
 } mesh;
+
+// Matrix 4x4 structure
+typedef struct {
+    float m[4][4]; // 4x4 matrix
+} mat4x4;
+
+// Key State Array
+const int NUM_KEYS = 512; // Assuming you need to track up to 512 keys
+bool key_states[NUM_KEYS] = {false};
+
+// Function to get key state
+bool GetKey(int key) {
+    if (key >= 0 && key < NUM_KEYS) {
+        return key_states[key];
+    }
+    return false; // Key out of range
+}
+
+// Function Prototypes
+vec3d vec3d_mult_by_mat4x4(vec3d vec, mat4x4 m);
+mat4x4 mat4x4_mult_by_mat4x4(mat4x4 m_1, mat4x4 m_2);
+vec3d vec3d_add(vec3d a, vec3d b);
+vec3d vec3d_sub(vec3d a, vec3d b);
+vec3d vec3d_mult(vec3d a, float k);
+vec3d vec3d_div(vec3d a, float k);
+float vec3d_dot(vec3d a, vec3d b);
+vec3d vec3d_cross(vec3d a, vec3d b);
+float vec3d_length(vec3d v);
+mat4x4 matrix_point_at(vec3d pos, vec3d target, vec3d up);
+vec3d vec3d_normalize(vec3d v);
+triangle tri_div_by_w(triangle tri);
+triangle project_triangle(triangle tri);
+triangle transform_triangle(triangle tri, mat4x4 world_mat);
+void make_translation_matrix(float x_offset, float y_offset, float z_offset, mat4x4* translation_matrix);
+void make_rotation_matrix(float theta_x, float theta_y, float theta_z, mat4x4* rotation_matrix);
+float adjust(float p, float scale, float offset);
+float tri_depth(triangle tri);
+vec3d get_surface_normal(triangle tri);
+bool check_visibility(triangle tri, vec3d cam, vec3d* tri_normal);
+float illuminate_triangle(vec3d normalized_light_vec, vec3d tri_normal);
+mesh load_obj(const char* obj_file);
+void draw_polygon(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3, int r, int g, int b);
+int compare_triangles(const void* a, const void* b);
 
 // Global variables (similar to Python script)
 const float f_near = 0.1f;          // Near clipping plane
@@ -40,40 +87,122 @@ const float TICK = 60.0f;           // Target frames per second
 const float ROTATE_SPEED = 1.0f / TICK; // Rotation speed per frame
 const float obj_distance = 8.0f;    // Distance of the object from the camera
 
-// Function to normalize a vector
-vec3d normalize(vec3d v) {
-    // Calculate the magnitude (length) of the vector
-    float l = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-    // Divide each component by the magnitude to get a unit vector
-    return (vec3d){v.x / l, v.y / l, v.z / l, v.w};
-}
+
 
 // Function to multiply a vector by a 4x4 matrix
-vec3d vec3d_mult_by_4x4_matrix(vec3d vec, float m[4][4]) {
+vec3d vec3d_mult_by_mat4x4(vec3d vec, mat4x4 m) {
     // Convert the vector to a 4-element array for matrix multiplication
     float tmp_vec[4] = {vec.x, vec.y, vec.z, vec.w};
     float result[4] = {0};
     // Perform matrix multiplication
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
-            result[i] += tmp_vec[j] * m[j][i];
+            result[i] += tmp_vec[j] * m.m[j][i];
         }
     }
-    // Homogeneous divide if w is not zero
-    if (result[3] != 0) {
-        for (int i = 0; i < 4; i++) {
-            result[i] /= result[3];
-        }
-    }
-    // Return the resulting vector
     return (vec3d){result[0], result[1], result[2], result[3]};
+}
+
+mat4x4 mat4x4_mult_by_mat4x4(mat4x4 m_1, mat4x4 m_2) {
+    mat4x4 result;
+    // Perform matrix multiplication
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            result.m[i][j] = 0;
+            for (int k = 0; k < 4; k++) {
+                result.m[i][j] += m_1.m[i][k] * m_2.m[k][j];
+            }
+        }
+    }
+    return result;
+}
+
+// Vector Operations
+vec3d vec3d_add(vec3d a, vec3d b) {
+    return (vec3d){a.x + b.x, a.y + b.y, a.z + b.z, 1.0f};
+}
+
+vec3d vec3d_sub(vec3d a, vec3d b) {
+    return (vec3d){a.x - b.x, a.y - b.y, a.z - b.z, 1.0f};
+}
+
+vec3d vec3d_mult(vec3d a, float k) {
+    return (vec3d){a.x * k, a.y * k, a.z * k, 1.0f};
+}
+
+vec3d vec3d_div(vec3d a, float k) {
+    return (vec3d){a.x / k, a.y / k, a.z / k, 1.0f};
+}
+
+float vec3d_dot(vec3d a, vec3d b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+vec3d vec3d_cross(vec3d a, vec3d b) {
+    return (vec3d){
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x,
+        1.0f
+    };
+}
+
+float vec3d_length(vec3d v) {
+    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+mat4x4 matrix_point_at(vec3d pos, vec3d target, vec3d up) {
+    // Calculate the forward vector
+    vec3d new_forward = vec3d_sub(target, pos);
+    new_forward = vec3d_normalize(new_forward);
+    // Calculate the up direction
+    vec3d a = vec3d_mult(new_forward, vec3d_dot(up, new_forward));
+    vec3d new_up = vec3d_sub(up, a);
+    new_up = vec3d_normalize(new_up);
+    // Calculate the right direction
+    vec3d new_right = vec3d_cross(new_up, new_forward);
+    // Construct Dimensioning & Translation Matrix
+    mat4x4 matrix;
+    matrix.m[0][0] = new_right.x;   matrix.m[0][1] = new_right.y;   matrix.m[0][2] = new_right.z;   matrix.m[0][3] = 0.0f;
+    matrix.m[1][0] = new_up.x;      matrix.m[1][1] = new_up.y;      matrix.m[1][2] = new_up.z;      matrix.m[1][3] = 0.0f;
+    matrix.m[2][0] = new_forward.x; matrix.m[2][1] = new_forward.y; matrix.m[2][2] = new_forward.z; matrix.m[2][3] = 0.0f;
+    matrix.m[3][0] = pos.x;         matrix.m[3][1] = pos.y;         matrix.m[3][2] = pos.z;         matrix.m[3][3] = 1.0f;
+    return matrix;
+}
+
+mat4x4 Matrix_QuickInverse(mat4x4 m) 
+// Only for Rotation/Translation Matrices
+{
+    mat4x4 matrix;
+    matrix.m[0][0] = m.m[0][0]; matrix.m[0][1] = m.m[1][0]; matrix.m[0][2] = m.m[2][0]; matrix.m[0][3] = 0.0f;
+    matrix.m[1][0] = m.m[0][1]; matrix.m[1][1] = m.m[1][1]; matrix.m[1][2] = m.m[2][1]; matrix.m[1][3] = 0.0f;
+    matrix.m[2][0] = m.m[0][2]; matrix.m[2][1] = m.m[1][2]; matrix.m[2][2] = m.m[2][2]; matrix.m[2][3] = 0.0f;
+    matrix.m[3][0] = -(m.m[3][0] * matrix.m[0][0] + m.m[3][1] * matrix.m[1][0] + m.m[3][2] * matrix.m[2][0]);
+    matrix.m[3][1] = -(m.m[3][0] * matrix.m[0][1] + m.m[3][1] * matrix.m[1][1] + m.m[3][2] * matrix.m[2][1]);
+    matrix.m[3][2] = -(m.m[3][0] * matrix.m[0][2] + m.m[3][1] * matrix.m[1][2] + m.m[3][2] * matrix.m[2][2]);
+    matrix.m[3][3] = 1.0f;
+    return matrix;
+}
+
+// Function to normalize a vector
+vec3d vec3d_normalize(vec3d v) {
+    // Calculate the magnitude (length) of the vector
+    float l = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+    // Divide each component by the magnitude to get a unit vector
+    return (vec3d){v.x / l, v.y / l, v.z / l, v.w};
 }
 
 // Function to divide a triangle by w (homogeneous divide)
 triangle tri_div_by_w(triangle tri) {
     triangle out_tri;
     // Divide each vertex by its w component
+
     for (int i = 0; i < 3; i++) {
+        // Return input triangle if any component is zero
+        if (tri.p[i].w == 0) {
+            return tri;
+        }
+        // Perform the division
         out_tri.p[i] = (vec3d){tri.p[i].x / tri.p[i].w, tri.p[i].y / tri.p[i].w, tri.p[i].z / tri.p[i].w, tri.p[i].w};
     }
     return out_tri;
@@ -82,79 +211,67 @@ triangle tri_div_by_w(triangle tri) {
 // Function to project a triangle from 3D to 2D
 triangle project_triangle(triangle tri) {
     // Define the projection matrix
-    float projection_matrix[4][4];
-    projection_matrix[0][0] = f_aspect_ratio * f_fov_rad; projection_matrix[0][1] = 0; projection_matrix[0][2] = 0; projection_matrix[0][3] = 0;
-    projection_matrix[1][0] = 0; projection_matrix[1][1] = f_fov_rad; projection_matrix[1][2] = 0; projection_matrix[1][3] = 0;
-    projection_matrix[2][0] = 0; projection_matrix[2][1] = 0; projection_matrix[2][2] = f_far / (f_far - f_near); projection_matrix[2][3] = 1;
-    projection_matrix[3][0] = 0; projection_matrix[3][1] = 0; projection_matrix[3][2] = (-f_far * f_near) / (f_far - f_near); projection_matrix[3][3] = 0;
+    mat4x4 projection_matrix;
+    projection_matrix.m[0][0] = f_aspect_ratio * f_fov_rad; projection_matrix.m[0][1] = 0; projection_matrix.m[0][2] = 0; projection_matrix.m[0][3] = 0;
+    projection_matrix.m[1][0] = 0; projection_matrix.m[1][1] = f_fov_rad; projection_matrix.m[1][2] = 0; projection_matrix.m[1][3] = 0;
+    projection_matrix.m[2][0] = 0; projection_matrix.m[2][1] = 0; projection_matrix.m[2][2] = f_far / (f_far - f_near); projection_matrix.m[2][3] = 1;
+    projection_matrix.m[3][0] = 0; projection_matrix.m[3][1] = 0; projection_matrix.m[3][2] = (-f_far * f_near) / (f_far - f_near); projection_matrix.m[3][3] = 0;
     triangle projected_tri;
     // Project each vertex of the triangle
     for (int i = 0; i < 3; i++) {
-        projected_tri.p[i] = vec3d_mult_by_4x4_matrix(tri.p[i], projection_matrix);
+        projected_tri.p[i] = vec3d_mult_by_mat4x4(tri.p[i], projection_matrix);
     }
     return projected_tri;
 }
 
 // Function to transform a triangle by a world matrix
-triangle transform_triangle(triangle tri, float world_mat[4][4]) {
+triangle transform_triangle(triangle tri, mat4x4 world_mat) {
     triangle transformed_tri;
     // Transform each vertex of the triangle
     for (int i = 0; i < 3; i++) {
-        transformed_tri.p[i] = vec3d_mult_by_4x4_matrix(tri.p[i], world_mat);
+        transformed_tri.p[i] = vec3d_mult_by_mat4x4(tri.p[i], world_mat);
     }
     return transformed_tri;
 }
 
 // Function to create a translation matrix
-void make_translation_matrix(float x_offset, float y_offset, float z_offset, float translation_matrix[4][4]) {
+void make_translation_matrix(float x_offset, float y_offset, float z_offset, mat4x4* translation_matrix) {
     // Initialize the translation matrix
-    translation_matrix[0][0] = 1; translation_matrix[0][1] = 0; translation_matrix[0][2] = 0; translation_matrix[0][3] = 0;
-    translation_matrix[1][0] = 0; translation_matrix[1][1] = 1; translation_matrix[1][2] = 0; translation_matrix[1][3] = 0;
-    translation_matrix[2][0] = 0; translation_matrix[2][1] = 0; translation_matrix[2][2] = 1; translation_matrix[2][3] = 0;
-    translation_matrix[3][0] = x_offset; translation_matrix[3][1] = y_offset; translation_matrix[3][2] = z_offset; translation_matrix[3][3] = 1;
+    translation_matrix->m[0][0] = 1; translation_matrix->m[0][1] = 0; translation_matrix->m[0][2] = 0; translation_matrix->m[0][3] = 0;
+    translation_matrix->m[1][0] = 0; translation_matrix->m[1][1] = 1; translation_matrix->m[1][2] = 0; translation_matrix->m[1][3] = 0;
+    translation_matrix->m[2][0] = 0; translation_matrix->m[2][1] = 0; translation_matrix->m[2][2] = 1; translation_matrix->m[2][3] = 0;
+    translation_matrix->m[3][0] = x_offset; translation_matrix->m[3][1] = y_offset; translation_matrix->m[3][2] = z_offset; translation_matrix->m[3][3] = 1;
 }
 
 // Function to create a rotation matrix
-void make_rotation_matrix(float theta_x, float theta_y, float theta_z, float rotation_matrix[4][4]) {
-    // Define rotation matrices for each axis
-    float rot_x[4][4] = {
-        {1, 0, 0, 0},
-        {0, cosf(theta_x), -sinf(theta_x), 0},
-        {0, sinf(theta_x), cosf(theta_x), 0},
-        {0, 0, 0, 1}
+void make_rotation_matrix(float theta_x, float theta_y, float theta_z, mat4x4* rotation_matrix) {
+    mat4x4 rot_x = {
+        {
+            {1, 0, 0, 0},
+            {0, cosf(theta_x), -sinf(theta_x), 0},
+            {0, sinf(theta_x), cosf(theta_x), 0},
+            {0, 0, 0, 1}
+        }
     };
-    float rot_y[4][4] = {
-        {cosf(theta_y), 0, sinf(theta_y), 0},
-        {0, 1, 0, 0},
-        {-sinf(theta_y), 0, cosf(theta_y), 0},
-        {0, 0, 0, 1}
+    mat4x4 rot_y = {
+        {
+            {cosf(theta_y), 0, sinf(theta_y), 0},
+            {0, 1, 0, 0},
+            {-sinf(theta_y), 0, cosf(theta_y), 0},
+            {0, 0, 0, 1}
+        }
     };
-    float rot_z[4][4] = {
-        {cosf(theta_z), -sinf(theta_z), 0, 0},
-        {sinf(theta_z), cosf(theta_z), 0, 0},
-        {0, 0, 1, 0},
-        {0, 0, 0, 1}
+    mat4x4 rot_z = {
+        {
+            {cosf(theta_z), -sinf(theta_z), 0, 0},
+            {sinf(theta_z), cosf(theta_z), 0, 0},
+            {0, 0, 1, 0},
+            {0, 0, 0, 1}
+        }
     };
 
-    // Multiply matrices: rot_x * rot_y * rot_z
-    float temp_matrix[4][4];
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            temp_matrix[i][j] = 0;
-            for (int k = 0; k < 4; k++) {
-                temp_matrix[i][j] += rot_x[i][k] * rot_y[k][j];
-            }
-        }
-    }
-
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            rotation_matrix[i][j] = 0;
-            for (int k = 0; k < 4; k++) {
-                rotation_matrix[i][j] += temp_matrix[i][k] * rot_z[k][j];
-            }
-        }
-    }
+    mat4x4 temp_matrix = mat4x4_mult_by_mat4x4(rot_x, rot_y);
+    *rotation_matrix = mat4x4_mult_by_mat4x4(temp_matrix, rot_z);
 }
 
 // Function to adjust coordinates for rendering
@@ -167,21 +284,6 @@ float adjust(float p, float scale, float offset) {
 float tri_depth(triangle tri) {
     // Calculate the average z-coordinate of the triangle's vertices
     return (tri.p[0].z + tri.p[1].z + tri.p[2].z) / 3.0f;
-}
-
-// Function to get the surface normal of a triangle
-vec3d get_surface_normal(triangle tri);
-
-// Function to check if a triangle is visible
-bool check_visibility(triangle tri, vec3d cam, vec3d* tri_normal) {
-    // Get the surface normal of the triangle
-    *tri_normal = get_surface_normal(tri);
-    // Calculate the vector from the camera to a vertex of the triangle
-    vec3d cam_to_vertex = {tri.p[0].x - cam.x, tri.p[0].y - cam.y, tri.p[0].z - cam.z, 1.0f};
-    // Calculate the dot product of the surface normal and the camera-to-vertex vector
-    float dot_prod = tri_normal->x * cam_to_vertex.x + tri_normal->y * cam_to_vertex.y + tri_normal->z * cam_to_vertex.z;
-    // If the dot product is negative, the triangle is visible
-    return dot_prod < 0;
 }
 
 // Function to get the surface normal of a triangle
@@ -202,6 +304,18 @@ vec3d get_surface_normal(triangle tri) {
     surface_normal.y /= l;
     surface_normal.z /= l;
     return surface_normal;
+}
+
+// Function to check if a triangle is visible
+bool check_visibility(triangle tri, vec3d cam, vec3d* tri_normal) {
+    // Get the surface normal of the triangle
+    *tri_normal = get_surface_normal(tri);
+    // Calculate the vector from the camera to a vertex of the triangle
+    vec3d cam_to_vertex = {tri.p[0].x - cam.x, tri.p[0].y - cam.y, tri.p[0].z - cam.z, 1.0f};
+    // Calculate the dot product of the surface normal and the camera-to-vertex vector
+    float dot_prod = tri_normal->x * cam_to_vertex.x + tri_normal->y * cam_to_vertex.y + tri_normal->z * cam_to_vertex.z;
+    // If the dot product is negative, the triangle is visible
+    return dot_prod < 0;
 }
 
 // Function to illuminate a triangle
@@ -329,10 +443,10 @@ int main(int argc, char* argv[]) {
     }
 
     // Load the OBJ file
-    mesh cube = load_obj("teapot.obj");
+    mesh cube = load_obj("axis.obj");
 
     // Normalize the light direction
-    vec3d normalized_light_direction = normalize(light_direction);
+    vec3d normalized_light_direction = vec3d_normalize(light_direction);
 
     // Calculate f_fov_rad
     f_fov_rad = 1.0f / tanf(f_fov * 0.5f / 180.0f * M_PI);
@@ -346,31 +460,68 @@ int main(int argc, char* argv[]) {
         while (SDL_PollEvent(&event) != 0) {
             if (event.type == SDL_QUIT) {
                 quit = true;
-            }
-        }
-
-        // Update rotation angles
-        angle_x += ROTATE_SPEED;
-        angle_y += ROTATE_SPEED * 0.3f;
-        angle_z += ROTATE_SPEED * 0.5f;
-
-        // Create rotation and translation matrices
-        float rotation_matrix[4][4];
-        float translation_matrix[4][4];
-        float world_matrix[4][4];
-
-        make_rotation_matrix(angle_x, angle_y, angle_z, rotation_matrix);
-        make_translation_matrix(0, 0, obj_distance, translation_matrix);
-
-        // Multiply matrices to get the world matrix
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                world_matrix[i][j] = 0;
-                for (int k = 0; k < 4; k++) {
-                    world_matrix[i][j] += rotation_matrix[i][k] * translation_matrix[k][j];
+            } else if (event.type == SDL_KEYDOWN) {
+                if (event.key.keysym.sym < NUM_KEYS) {
+                    key_states[event.key.keysym.sym] = true;
+                }
+            } else if (event.type == SDL_KEYUP) {
+                if (event.key.keysym.sym < NUM_KEYS) {
+                    key_states[event.key.keysym.sym] = false;
                 }
             }
         }
+
+        // Camera Movement
+        float camera_speed = 8.0f; // Adjust this for faster/slower movement
+        float fElapsedTime = 1.0f / TICK; // Time since last frame
+
+        if (GetKey(SDLK_w)) {
+            viewer_Camera.z += camera_speed * fElapsedTime; // Move forward
+        }
+        if (GetKey(SDLK_s)) {
+            viewer_Camera.z -= camera_speed * fElapsedTime; // Move backward
+        }
+        if (GetKey(SDLK_a)) {
+            viewer_Camera.x -= camera_speed * fElapsedTime; // Move left
+        }
+        if (GetKey(SDLK_d)) {
+            viewer_Camera.x += camera_speed * fElapsedTime; // Move right
+        }
+        if (GetKey(SDLK_r)) {
+            viewer_Camera.y += camera_speed * fElapsedTime; // Move up
+        }
+        if (GetKey(SDLK_f)) {
+            viewer_Camera.y -= camera_speed * fElapsedTime; // Move down
+        }
+        // if (GetKey(SDLK_LEFT)) {
+        //     angle_y -= ROTATE_SPEED; // Rotate left
+        // }
+        // if (GetKey(SDLK_RIGHT)) {
+        //     angle_y += ROTATE_SPEED; // Rotate right
+        // }
+
+        // Update rotation angles
+        // angle_x += ROTATE_SPEED;
+        // angle_y += ROTATE_SPEED * 0.3f;
+        // angle_z += ROTATE_SPEED * 0.5f;
+
+        // Create rotation and translation matrices
+        mat4x4 rotation_matrix;
+        mat4x4 translation_matrix;
+        mat4x4 world_matrix;
+
+        make_rotation_matrix(angle_x, angle_y, angle_z, &rotation_matrix);
+        make_translation_matrix(0, 0, obj_distance, &translation_matrix);
+
+        world_matrix = mat4x4_mult_by_mat4x4(rotation_matrix, translation_matrix);
+
+        // Create Point At matrix for the camera
+        vec3d v_look_dir = {0, 0, 1};
+        vec3d v_up = {0, 1, 0};
+        vec3d v_target = vec3d_add(viewer_Camera, v_look_dir);
+        mat4x4 camera_matrix = matrix_point_at(viewer_Camera, v_target, v_up);
+        // Invert the camera matrix
+        mat4x4 view_matrix = Matrix_QuickInverse(camera_matrix);    
 
         // Allocate memory for triangles to raster
         triangle* triangles_to_raster = (triangle*)malloc(cube.num_tris * sizeof(triangle));
@@ -383,8 +534,11 @@ int main(int argc, char* argv[]) {
             vec3d tri_normal;
             // Check if the triangle is visible
             bool visible = check_visibility(transformed_triangle, viewer_Camera, &tri_normal);
+
+            // Convert World space to View space
+            triangle viewed_triangle = transform_triangle(transformed_triangle, view_matrix);
             // Project the triangle to 2D
-            triangle projected_triangle = project_triangle(transformed_triangle);
+            triangle projected_triangle = project_triangle(viewed_triangle);
             // Divide the triangle by w
             projected_triangle = tri_div_by_w(projected_triangle);
 

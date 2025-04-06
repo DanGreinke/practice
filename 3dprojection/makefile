@@ -10,3 +10,6 @@ LDFLAGS = `pkg-config --libs sdl2`
 
 clean:
 	rm -f 3dRenderer 3dRenderer.o
+
+run: 3dRenderer
+	./3dRenderer
