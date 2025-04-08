@@ -420,6 +420,95 @@ int compare_triangles(const void* a, const void* b) {
     return 0;
 }
 
+vec3d vector_intersect_plane(vec3d plane_p, vec3d plane_n, vec3d line_start, vec3d line_end) {
+    plane_n = vec3d_normalize(plane_n);
+    float plane_d = -vec3d_dot(plane_n, plane_p);
+    float ad = vec3d_dot(line_start, plane_n);
+    float bd = vec3d_dot(line_end, plane_n);
+    float t = (-plane_d - ad) / (bd - ad);
+    vec3d line_start_to_end = vec3d_sub(line_end, line_start);
+    vec3d line_to_intersect = vec3d_mult(line_start_to_end, t);
+    vec3d intersection = vec3d_add(line_start, line_to_intersect);
+    return intersection;
+}
+
+// Function to calculate the signed distance from a point to a plane
+float dist(vec3d p, vec3d plane_p, vec3d plane_n) {
+    // vec3d n = vec3d_normalize(p); // This line is incorrect
+    // return (plane_n.x * n.x + plane_n.y * n.y + plane_n.z * n.z) - vec3d_dot(plane_n, plane_p);
+    return vec3d_dot(plane_n, vec3d_sub(p, plane_p)); // Corrected distance calculation
+}
+
+int triangle_clip_against_plane(vec3d plane_p, vec3d plane_n, triangle *in_tri, triangle *out_tri1, triangle *out_tri2) {
+    // Make sure plane normal is normalized
+    plane_n = vec3d_normalize(plane_n);
+
+    // Create two temporary storage arrays to classify points on either side of the plane
+    // If the distance sign is positive, the point is on the "inside" of the plane
+    vec3d* inside_points[3]; int n_inside_points_count = 0;
+    vec3d* outside_points[3]; int n_outside_points_count = 0;
+
+    // Get signed distance of each point in triangle to plane
+    float d0 = dist(in_tri->p[0], plane_p, plane_n);
+    float d1 = dist(in_tri->p[1], plane_p, plane_n);
+    float d2 = dist(in_tri->p[2], plane_p, plane_n);
+
+    if (d0 >= 0) { inside_points[n_inside_points_count++] = &in_tri->p[0]; }
+    else { outside_points[n_outside_points_count++] = &in_tri->p[0]; }
+    if (d1 >= 0) { inside_points[n_inside_points_count++] = &in_tri->p[1]; }
+    else { outside_points[n_outside_points_count++] = &in_tri->p[1]; }
+    if (d2 >= 0) { inside_points[n_inside_points_count++] = &in_tri->p[2]; }
+    else { outside_points[n_outside_points_count++] = &in_tri->p[2]; }
+
+    // Classify the triangle points and split the input triangle into smaller output triangles
+    // if needed. There are four possible outcomes:
+    //   1. All points are inside the plane (no clipping)
+    //   2. All points are outside the plane, and the whole triangle is clipped (deleted)
+    //   3. Two points are inside and one point is outside (triangle becomes a quad, split into two new triangles)
+    //   4. One point is inside the plane and two are outside (triangle becomes a smaller triangle)
+    if (n_inside_points_count == 0) {
+        // All points are outside the plane, and we delete the whole triangle
+        return 0;
+    }
+    if (n_inside_points_count == 3) {
+        // All points are inside the plane, we keep the whole triangle
+        *out_tri1 = *in_tri;
+        return 1;
+    }
+    if (n_inside_points_count == 1 && n_outside_points_count == 2) {
+        // One point is inside and two points are outside
+    
+        // copy color info
+        out_tri1->c = in_tri->c;
+        // Keep inside point
+        out_tri1->p[0] = *inside_points[0];
+        // Find two new points where the triangle intersects the plane
+        out_tri1->p[1] = vector_intersect_plane(plane_p, plane_n, *inside_points[0], *outside_points[0]);
+        out_tri1->p[2] = vector_intersect_plane(plane_p, plane_n, *inside_points[0], *outside_points[1]);
+    
+        return 1;
+    
+    }
+    if (n_inside_points_count == 2 && n_outside_points_count == 1) {
+        // Two points are inside and one point is outside, therefore we have a quad
+    
+        // copy color info for two new triangles
+        out_tri1->c = in_tri->c;
+        out_tri2->c = in_tri->c;
+    
+        // Create the first triangle with the two inside points, and the intercept
+        // between the outside point and the plane
+        out_tri1->p[0] = *inside_points[0];
+        out_tri1->p[1] = *inside_points[1];
+        out_tri1->p[2] = vector_intersect_plane(plane_p, plane_n, *inside_points[0], *outside_points[0]);
+        // Create the second triangle using the second inside point, the newly generated point on triangle 1,
+        // and the intercept between the other outside point and the plane
+        out_tri2->p[0] = *inside_points[1];
+        out_tri2->p[1] = out_tri1->p[2];
+        out_tri2->p[2] = vector_intersect_plane(plane_p, plane_n, *inside_points[1], *outside_points[0]);
+        return 2;
+    }
+}
 int main(int argc, char* argv[]) {
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -453,8 +542,16 @@ int main(int argc, char* argv[]) {
     bool quit = false;
     SDL_Event event;
 
+    // Allocate memory for triangles to raster
+    triangle* triangles_to_raster = (triangle*)malloc(cube.num_tris * sizeof(triangle));
+    if (triangles_to_raster == NULL) {
+        fprintf(stderr, "Failed to allocate memory for triangles_to_raster\n");
+        return 1;
+    }
+
     // Main loop
     while (!quit) {
+        int num_triangles_to_raster = 0;
         // Handle events
         while (SDL_PollEvent(&event) != 0) {
             if (event.type == SDL_QUIT) {
@@ -482,8 +579,8 @@ int main(int argc, char* argv[]) {
 
         // Create Point At matrix for the camera
         // vec3d v_look_dir = {0, 0, 1};
-        vec3d v_up = {0, 1, 0};
-        vec3d v_target = {0, 0, 1};
+        vec3d v_up = {0, 1, 0, 1};
+        vec3d v_target = {0, 0, 1, 1};
         make_rotation_matrix(angle_x, angle_y, angle_z, &camera_rotation_matrix);
         vec3d v_look_dir = vec3d_mult_by_mat4x4(v_target, camera_rotation_matrix);
         // vec3d v_target = vec3d_add(viewer_Camera, v_look_dir);
@@ -494,13 +591,6 @@ int main(int argc, char* argv[]) {
         // Camera Movement
         float camera_speed = 8.0f; // Adjust this for faster/slower movement
         float fElapsedTime = 1.0f / TICK; // Time since last frame
-
-        if (GetKey(SDLK_w)) {
-            viewer_Camera.z += camera_speed * fElapsedTime; // Move forward
-        }
-        if (GetKey(SDLK_s)) {
-            viewer_Camera.z -= camera_speed * fElapsedTime; // Move backward
-        }
 
         vec3d vector_forward = vec3d_mult(v_look_dir, 8.0f * fElapsedTime);
 
@@ -519,36 +609,14 @@ int main(int argc, char* argv[]) {
 		if (GetKey(SDLK_d)) {
 			angle_y += 2.0f * fElapsedTime;
         }
-        // if (GetKey(SDLK_a)) {
-        //     viewer_Camera.x += camera_speed * fElapsedTime; // Move left; opposite what you'd expect because I inverted the axis
-        // }
-        // if (GetKey(SDLK_d)) {
-        //     viewer_Camera.x -= camera_speed * fElapsedTime; // Move right; opposite what you'd expect because I inverted the axis
-        // }
-        // if (GetKey(SDLK_r)) {
-        //     viewer_Camera.y += camera_speed * fElapsedTime; // Move up
-        // }
-        // if (GetKey(SDLK_f)) {
-        //     viewer_Camera.y -= camera_speed * fElapsedTime; // Move down
-        // }
-        // if (GetKey(SDLK_LEFT)) {
-        //     angle_y -= ROTATE_SPEED; // Rotate left
-        // }
-        // if (GetKey(SDLK_RIGHT)) {
-        //     angle_y += ROTATE_SPEED; // Rotate right
-        // }
 
-        // Update rotation angles
-        // angle_x += ROTATE_SPEED;
-        // angle_y += ROTATE_SPEED * 0.3f;
-        // angle_z += ROTATE_SPEED * 0.5f;
+        if (GetKey(SDLK_r)) {
+            viewer_Camera.y += camera_speed * fElapsedTime; // Move up
+        }
 
-  
-
-        // Allocate memory for triangles to raster
-        triangle* triangles_to_raster = (triangle*)malloc(cube.num_tris * sizeof(triangle));
-        int num_triangles_to_raster = 0;
-
+        if (GetKey(SDLK_f)) {
+            viewer_Camera.y -= camera_speed * fElapsedTime; // Move down
+        }
         // Process each triangle in the mesh
         for (int i = 0; i < cube.num_tris; i++) {
             // Transform the triangle by the world matrix
@@ -556,22 +624,32 @@ int main(int argc, char* argv[]) {
             vec3d tri_normal;
             // Check if the triangle is visible
             bool visible = check_visibility(transformed_triangle, viewer_Camera, &tri_normal);
-
             // Convert World space to View space
             triangle viewed_triangle = transform_triangle(transformed_triangle, view_matrix);
-            // Project the triangle to 2D
-            triangle projected_triangle = project_triangle(viewed_triangle);
-            // Divide the triangle by w
-            projected_triangle = tri_div_by_w(projected_triangle);
+            // Clip the triangle against the near plane
+            int num_clipped_triangles = 0;
+            triangle clipped[2];
+            num_clipped_triangles = triangle_clip_against_plane((vec3d){0.0f, 0.0f, 0.1f},
+                                                                (vec3d){0.0f, 0.0f, 1.0f},
+                                                                &viewed_triangle,
+                                                                &clipped[0],
+                                                                &clipped[1]);                
+            for (int n = 0; n < num_clipped_triangles; n++) {
 
-            // If the triangle is visible
-            if (visible) {
-                // Calculate the illumination of the triangle
-                float illumination = illuminate_triangle(normalized_light_direction, tri_normal);
-                // Set the color of the triangle based on illumination
-                projected_triangle.c = (vec3d){light_color.x * illumination, light_color.y * illumination, light_color.z * illumination, 1.0f};
-                // Add the triangle to the raster list
-                triangles_to_raster[num_triangles_to_raster++] = projected_triangle;
+                // Project the triangle to 2D
+                triangle projected_triangle = project_triangle(clipped[n]);
+                // Divide the triangle by w
+                projected_triangle = tri_div_by_w(projected_triangle);
+
+                // If the triangle is visible
+                if (visible) {
+                    // Calculate the illumination of the triangle
+                    float illumination = illuminate_triangle(normalized_light_direction, tri_normal);
+                    // Set the color of the triangle based on illumination
+                    projected_triangle.c = (vec3d){light_color.x * illumination, light_color.y * illumination, light_color.z * illumination, 1.0f};
+                    // Add the triangle to the raster list
+                    triangles_to_raster[num_triangles_to_raster++] = projected_triangle;
+                }
             }
         }
 
@@ -598,18 +676,15 @@ int main(int argc, char* argv[]) {
         // Update the screen
         SDL_RenderPresent(renderer);
 
-        // Free the memory allocated for triangles to raster
-        free(triangles_to_raster);
-
         // Simulate frame update
         SDL_Delay(1000 / TICK);
     }
 
     // Clean up
+    free(triangles_to_raster);
     free(cube.tris);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
-
     return 0;
 }
