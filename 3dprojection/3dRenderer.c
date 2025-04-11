@@ -33,6 +33,13 @@ typedef struct {
     float m[4][4]; // 4x4 matrix
 } mat4x4;
 
+typedef struct {
+    void* data;     // Pointer to the dynamically allocated array (now void*)
+    size_t element_size; // Size of each element
+    int size;      // Current number of elements
+    int capacity;  // Maximum number of elements
+} DynamicArray;
+
 // Key State Array
 const int NUM_KEYS = 512; // Assuming you need to track up to 512 keys
 bool key_states[NUM_KEYS] = {false};
@@ -405,6 +412,24 @@ void draw_polygon(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3
     SDL_RenderGeometry(renderer, NULL, vertices, 3, NULL, 0);
 }
 
+void draw_triangle_edges(SDL_Renderer* renderer, float x1, float y1, float x2, float y2, float x3, float y3, int r, int g, int b) {
+    // Adjust the coordinates to the center of the screen
+    x1 = adjust(x1, scale, WINDOW_SIZE / 2);
+    y1 = adjust(y1, scale, WINDOW_SIZE / 2);
+    x2 = adjust(x2, scale, WINDOW_SIZE / 2);
+    y2 = adjust(y2, scale, WINDOW_SIZE / 2);
+    x3 = adjust(x3, scale, WINDOW_SIZE / 2);
+    y3 = adjust(y3, scale, WINDOW_SIZE / 2);
+
+    // Set the draw color
+    SDL_SetRenderDrawColor(renderer, r, g, b, 255);
+
+    // Draw the lines
+    SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+    SDL_RenderDrawLine(renderer, x2, y2, x3, y3);
+    SDL_RenderDrawLine(renderer, x3, y3, x1, y1);
+}
+
 // Comparison function for qsort
 int compare_triangles(const void* a, const void* b) {
     // Cast the void pointers to triangle pointers
@@ -509,6 +534,90 @@ int triangle_clip_against_plane(vec3d plane_p, vec3d plane_n, triangle *in_tri, 
         return 2;
     }
 }
+
+// Function to initialize the dynamic array
+void dynamicArrayInit(DynamicArray* arr, size_t element_size, int initialCapacity) {
+    arr->data = malloc(initialCapacity * element_size);
+    if (arr->data == NULL) {
+        fprintf(stderr, "Memory allocation failed in dynamicArrayInit\n");
+        exit(1);
+    }
+    arr->element_size = element_size;
+    arr->size = 0;
+    arr->capacity = initialCapacity;
+}
+
+// Function to add an element to the end of the array (like push_back)
+void dynamicArrayPushBack(DynamicArray* arr, const void* value) {
+    if (arr->size == arr->capacity) {
+        arr->capacity *= 2;
+        void* newData = realloc(arr->data, arr->capacity * arr->element_size);
+        if (newData == NULL) {
+            fprintf(stderr, "Memory reallocation failed in dynamicArrayPushBack\n");
+            exit(1);
+        }
+        arr->data = newData;
+    }
+
+    // Calculate the memory location of the new element
+    char* target = (char*)arr->data + arr->size * arr->element_size;
+
+    // Copy the new element into the array
+    memcpy(target, value, arr->element_size);
+
+    arr->size++;
+}
+
+// Function to remove and return the last element from the array
+void* dynamicArrayPopFront(DynamicArray* arr) {
+    // Check if the array is empty
+    if (arr == NULL || arr->size == 0) {
+        fprintf(stderr, "Error: Cannot pop from an empty or NULL array\n");
+        return NULL;
+    }
+
+    // 1. Allocate memory for the element to be returned
+    void* return_val = malloc(arr->element_size);
+    if (return_val == NULL) {
+        fprintf(stderr, "Error: Failed to allocate memory for popped element\n");
+        return NULL; // Memory allocation failed
+    }
+
+    // 2. Copy the first element's data into the return buffer
+    memcpy(return_val, arr->data, arr->element_size);
+
+    // 3. Shift all subsequent elements one position to the left
+    // Calculate the starting address of the second element
+    char* source = (char*)arr->data + arr->element_size;
+    // Calculate the number of bytes to move (all elements except the first)
+    size_t bytes_to_move = (arr->size - 1) * arr->element_size;
+
+    // Use memmove for safe shifting (handles overlapping memory)
+    // The destination is the start of the array data
+    if (arr->size > 1) { // Only shift if there's more than one element
+         memmove(arr->data, source, bytes_to_move);
+    }
+
+    // 4. Decrease the array size
+    arr->size--;
+
+    // Optional: Consider shrinking the array if size becomes much smaller than capacity
+    // (This adds complexity and might not always be desired due to realloc cost)
+    // if (arr->size > 0 && arr->size <= arr->capacity / 4) { ... shrink logic ... }
+
+    // 5. Return the pointer to the copied first element
+    return return_val;
+}
+
+// Function to free the allocated memory
+void dynamicArrayFree(DynamicArray* arr) {
+    free(arr->data);
+    arr->data = NULL;
+    arr->size = 0;
+    arr->capacity = 0;
+    arr->element_size = 0;
+}
+
 int main(int argc, char* argv[]) {
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -531,7 +640,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Load the OBJ file
-    mesh cube = load_obj("axis.obj");
+    mesh cube = load_obj("mountains.obj");
 
     // Normalize the light direction
     vec3d normalized_light_direction = vec3d_normalize(light_direction);
@@ -629,11 +738,13 @@ int main(int argc, char* argv[]) {
             // Clip the triangle against the near plane
             int num_clipped_triangles = 0;
             triangle clipped[2];
-            num_clipped_triangles = triangle_clip_against_plane((vec3d){0.0f, 0.0f, 0.1f},
-                                                                (vec3d){0.0f, 0.0f, 1.0f},
+
+            num_clipped_triangles = triangle_clip_against_plane((vec3d){0.0f, 0.0f, f_near}, // Use f_near
+                                                                (vec3d){0.0f, 0.0f, 1.0f}, // Normal points +Z (into scene)
                                                                 &viewed_triangle,
                                                                 &clipped[0],
-                                                                &clipped[1]);                
+                                                                &clipped[1]);
+              
             for (int n = 0; n < num_clipped_triangles; n++) {
 
                 // Project the triangle to 2D
@@ -652,7 +763,8 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-
+        // printf("Sorting Triangles\n");
+        // printf("Drawing %d triangles\n", num_triangles_to_raster);
         // Sort triangles by depth
         qsort(triangles_to_raster, num_triangles_to_raster, sizeof(triangle), compare_triangles);
 
@@ -661,17 +773,113 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
 
         // Draw each triangle
+        // printf("Drawing %d triangles\n", num_triangles_to_raster);
+
+
         for (int i = 0; i < num_triangles_to_raster; i++) {
-            // Draw the triangle
-            draw_polygon(renderer,
-                         adjust(triangles_to_raster[i].p[0].x, scale, WINDOW_SIZE / 2),
-                         adjust(triangles_to_raster[i].p[0].y, scale, WINDOW_SIZE / 2),
-                         adjust(triangles_to_raster[i].p[1].x, scale, WINDOW_SIZE / 2),
-                         adjust(triangles_to_raster[i].p[1].y, scale, WINDOW_SIZE / 2),
-                         adjust(triangles_to_raster[i].p[2].x, scale, WINDOW_SIZE / 2),
-                         adjust(triangles_to_raster[i].p[2].y, scale, WINDOW_SIZE / 2),
-                         (int)triangles_to_raster[i].c.x, (int)triangles_to_raster[i].c.y, (int)triangles_to_raster[i].c.z);
-        }
+            triangle clipped[2]; // Temporary storage for clipped triangles
+            DynamicArray list_triangles;
+
+            // Initialize the list for the current triangle from the raster list
+            dynamicArrayInit(&list_triangles, sizeof(triangle), 2); // Start small, it will grow
+            dynamicArrayPushBack(&list_triangles, &triangles_to_raster[i]);
+
+            // Clip against screen edges using the queue-like approach
+            for (int p = 0; p < 4; p++) {
+                int nTrisToAdd = 0;
+                // Get the number of triangles to process *for this specific plane*
+                int triangles_to_process_this_plane = list_triangles.size;
+                // printf("Processing %d triangles for plane %d\n", triangles_to_process_this_plane, p);
+                // Process only the triangles currently in the list for this plane
+                while (triangles_to_process_this_plane > 0) {
+                    // printf("Processing triangle %d\n", triangles_to_process_this_plane);
+                    // Take triangle from front of queue (popFront returns a malloc'd copy)
+                    triangle* test_tri = (triangle*)dynamicArrayPopFront(&list_triangles);
+                    if (test_tri == NULL) {
+                        // This should ideally not happen if triangles_to_process_this_plane > 0
+                        fprintf(stderr, "Error: dynamicArrayPopFront returned NULL unexpectedly during clipping.\n");
+                        triangles_to_process_this_plane--; // Decrement anyway to avoid infinite loop
+                        continue;
+                    }
+                    triangles_to_process_this_plane--; // Decrement the count for this plane pass
+
+                    // Define the clipping plane based on the loop variable 'p'
+                    vec3d plane_p, plane_n;
+                    switch (p) {
+                        case 0: // Bottom edge (Plane Y=0, Normal points "inwards" -Y, axis is reversed)
+                            plane_p = (vec3d){0.0f, 2.0f, 0.0f, 1.0f};
+                            plane_n = (vec3d){0.0f, -1.0f, 0.0f, 1.0f};
+                            break;
+                        case 1: // Top edge (Plane Y=WINDOW_SIZE-1, Normal points "inwards" +Y, axis is reversed)
+                            plane_p = (vec3d){0.0f, -2.0f, 0.0f, 1.0f};
+                            plane_n = (vec3d){0.0f, +1.0f, 0.0f, 1.0f};
+                            break;
+                        case 2: // Left edge (Plane X=0, Normal points "inwards" +X)
+                            plane_p = (vec3d){-2.0f, 0.0f, 0.0f, 1.0f};
+                            plane_n = (vec3d){1.0f, 0.0f, 0.0f, 1.0f};
+                            break;
+                        case 3: // Right edge (Plane X=WINDOW_SIZE-1, Normal points "inwards" -X)
+                            plane_p = (vec3d){2.0f, 0.0f, 0.0f, 1.0f};
+                            plane_n = (vec3d){-1.0f, 0.0f, 0.0f, 1.0f};
+                            break;
+                        default: // Should not happen
+                            free(test_tri); // Free memory before continuing
+                            continue;
+                    }
+                    // printf("Num Tris to add: %d\n", nTrisToAdd);
+                    // Clip the popped triangle against the current plane
+                    nTrisToAdd = triangle_clip_against_plane(plane_p, plane_n,
+                                                             test_tri, // Pass the pointer to the popped triangle data
+                                                             &clipped[0],
+                                                             &clipped[1]);
+
+                    // Add the resulting clipped triangle(s) back to the *end* of the list
+                    // These will be processed by the *next* plane (p+1)
+                    for (int w = 0; w < nTrisToAdd; w++) {
+                        dynamicArrayPushBack(&list_triangles, &clipped[w]);
+                    }
+
+                    // Free the memory allocated by dynamicArrayPopFront for the triangle we just processed
+                    free(test_tri);
+                }
+                // After the while loop, all triangles that existed *before* this plane's
+                // clipping pass have been processed. The list now contains the results,
+                // ready for the next plane.
+                // If the list becomes empty after clipping against a plane, we can stop early.
+                 if (list_triangles.size == 0) {
+                    printf("All triangles clipped out at plane %d\n", p);
+                    break; // Stop clipping this original triangle if it's fully outside a plane
+                 }
+            } // End of plane clipping loop (p)
+
+            // Draw the final resulting triangles from the list after all clipping planes
+            // printf("Drawing %d triangles\n", list_triangles.size);
+            for (int k = 0; k < list_triangles.size; k++) {
+                // Access the triangle data correctly using pointer arithmetic
+                triangle* tri_to_draw = (triangle*)((char*)list_triangles.data + k * list_triangles.element_size);
+                // Draw the filled polygon
+                draw_polygon(renderer,
+                    adjust(tri_to_draw->p[0].x, scale, WINDOW_SIZE / 2),
+                    adjust(tri_to_draw->p[0].y, scale, WINDOW_SIZE / 2),
+                    adjust(tri_to_draw->p[1].x, scale, WINDOW_SIZE / 2),
+                    adjust(tri_to_draw->p[1].y, scale, WINDOW_SIZE / 2),
+                    adjust(tri_to_draw->p[2].x, scale, WINDOW_SIZE / 2),
+                    adjust(tri_to_draw->p[2].y, scale, WINDOW_SIZE / 2),
+                    (int)fmax(0.0f, fmin(255.0f, tri_to_draw->c.x)), // Clamp color values
+                    (int)fmax(0.0f, fmin(255.0f, tri_to_draw->c.y)),
+                    (int)fmax(0.0f, fmin(255.0f, tri_to_draw->c.z)));
+
+                // Draw the edges (optional)
+                // Note: Edges are drawn *before* the adjust function is applied internally
+                draw_triangle_edges(renderer,
+                                    tri_to_draw->p[0].x, tri_to_draw->p[0].y,
+                                    tri_to_draw->p[1].x, tri_to_draw->p[1].y,
+                                    tri_to_draw->p[2].x, tri_to_draw->p[2].y,
+                                    255, 255, 255); // White edges
+            }
+            dynamicArrayFree(&list_triangles); // Free the list's internal data for this original triangle
+        } // End of raster loop (i)
+
 
         // Update the screen
         SDL_RenderPresent(renderer);
