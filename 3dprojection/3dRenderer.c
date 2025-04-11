@@ -77,6 +77,17 @@ float illuminate_triangle(vec3d normalized_light_vec, vec3d tri_normal);
 mesh load_obj(const char* obj_file);
 void draw_polygon(SDL_Renderer* renderer, int x1, int y1, int x2, int y2, int x3, int y3, int r, int g, int b);
 int compare_triangles(const void* a, const void* b);
+bool GetKey(int key); // For checking keyboard input state
+mat4x4 Matrix_QuickInverse(mat4x4 m); // For inverting the camera matrix
+void draw_triangle_edges(SDL_Renderer* renderer, float x1, float y1, float x2, float y2, float x3, float y3, int r, int g, int b); // For drawing wireframes
+vec3d vector_intersect_plane(vec3d plane_p, vec3d plane_n, vec3d line_start, vec3d line_end); // Used in clipping
+float dist(vec3d p, vec3d plane_p, vec3d plane_n); // Used in clipping
+int triangle_clip_against_plane(vec3d plane_p, vec3d plane_n, triangle *in_tri, triangle *out_tri1, triangle *out_tri2); // Clipping function
+void dynamicArrayInit(DynamicArray* arr, size_t element_size, int initialCapacity); // Dynamic array helper
+void dynamicArrayPushBack(DynamicArray* arr, const void* value); // Dynamic array helper
+void* dynamicArrayPopFront(DynamicArray* arr); // Dynamic array helper
+void dynamicArrayFree(DynamicArray* arr); // Dynamic array helper
+
 
 // Global variables (similar to Python script)
 const float f_near = 0.1f;          // Near clipping plane
