@@ -858,7 +858,7 @@ int main(int argc, char* argv[]) {
                 // ready for the next plane.
                 // If the list becomes empty after clipping against a plane, we can stop early.
                  if (list_triangles.size == 0) {
-                    printf("All triangles clipped out at plane %d\n", p);
+                    // printf("All triangles clipped out at plane %d\n", p);
                     break; // Stop clipping this original triangle if it's fully outside a plane
                  }
             } // End of plane clipping loop (p)
