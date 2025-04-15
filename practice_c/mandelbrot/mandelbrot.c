@@ -132,6 +132,6 @@ int main(void) {
     }
     fclose(img);
     // Free the allocated memory
-    free(iteration_data);
+    free(iteration_data); iteration_data = NULL;
     return 0;
 }
