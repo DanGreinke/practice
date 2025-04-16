@@ -9,6 +9,12 @@ Declare variables
 - HEIGHT and WIDTH of image in pixels
 - HEIGHT and WIDTH of region in complex plane (must be same aspect ratio as image)
 - maximum number of iterations
+- Create region structure to assist with zooming in
+
+Generate region of complex plane
+- Take zoom, x_center, y_center as input
+- Calculate x_min, x_max, y_min, y_max based on zoom and center
+  - Lock the aspect ratio of the image to 16:9
 
 Mandelbrot function
 - Take x,y as input, iterate the Mandelbrot function
@@ -29,25 +35,40 @@ Main function
 - Call image generation function
 - Save image to file
 
-Usage Note: PPM format is chosen for ease of use. I recommend exporting to a PNG and
-then deleting the PPM file.
+Usage Notes: 
+
+PPM format is chosen for ease of use and to minimize dependencies. I recommend exporting 
+to a PNG and then deleting the PPM file after running this script.
+
+Common 16:9 resolutions to try
+- 1280x720
+- 1920x1080
+- 2560x1440
+- 4480x2520
 ------------------------------------------------------------------------------------ */
 
-#define HEIGHT 2520
-#define WIDTH 4480
-double y_min = -0.390625; //-1.125;
-double y_max = -0.3375; //1.125;
-double x_min = -0.75; //-2.0;
-double x_max = -0.65625; //2.0;
+#define HEIGHT 720
+#define WIDTH 1280
+int zoom = 120;
+double x_center = -0.695;
+double y_center = -0.380;
 int max_iterations = 1000;
 
-// new x -> 1.316 (center), min = 1.253, max = 1.347
-// new y -> 0.783
-// 800 by 470
-// 860 by 504
-// typedef struct {
-//     int arr[HEIGHT][WIDTH]; // 2D array to store iterations
-// } iteration_array;
+typedef struct {
+    double x_min;
+    double x_max;
+    double y_min;
+    double y_max;
+} region;
+
+region generate_region(int zoom, double x_c, double y_c) {
+    region r;
+    r.x_min = x_c - 2.0/zoom;   
+    r.x_max = x_c + 2.0/zoom;
+    r.y_min = y_c - 1.125/zoom;
+    r.y_max = y_c + 1.125/zoom;
+    return r;
+}
 
 int mandelbrot(double x_in, double y_in) {
     double x_0 = x_in;
@@ -65,11 +86,11 @@ int mandelbrot(double x_in, double y_in) {
     return iterations;
 }
 
-int* generate_iteration_array(double x_min, double x_max, double y_min, double y_max) {
+int* generate_iteration_array(region r) {
     int height = HEIGHT;
     int width = WIDTH;
-    double x_step = (x_max - x_min) / width;
-    double y_step = (y_max - y_min) / height;
+    double x_step = (r.x_max - r.x_min) / width;
+    double y_step = (r.y_max - r.y_min) / height;
     double x_in, y_in;
     // Allocate memory on the heap
     int *out_array_data = malloc(height * width * sizeof(int));
@@ -84,8 +105,8 @@ int* generate_iteration_array(double x_min, double x_max, double y_min, double y
     for (int i = 0; i < height; i++) {
         // Loop over pixel in row (column)
         for (int j = 0; j < width; j++) {      
-            x_in = x_min + j * x_step;
-            y_in = y_min + i * y_step;
+            x_in = r.x_min + j * x_step;
+            y_in = r.y_min + i * y_step;
             out_array_data[i*width + j] = mandelbrot(x_in, y_in);
         }
     }
@@ -102,8 +123,11 @@ int color_map(int iterations) {
 }
 
 int main(void) {
+    // Set the region of the complex plane to be visualized
+    region r = generate_region(zoom, x_center, y_center);
+    
     // Receive pointer from generate_iteration_array function
-    int *iteration_data = generate_iteration_array(x_min, x_max, y_min, y_max);
+    int *iteration_data = generate_iteration_array(r);
 
     FILE *img;
     int i, j;
