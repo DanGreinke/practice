@@ -22,6 +22,8 @@ DENOMINATIONS = [
 
 
 def calculate_change(cost: float, payment: float) -> dict:
+    if cost < 0 or payment < 0:
+        raise ValueError("Cost and payment must be non-negative.")
     if payment < cost:
         raise ValueError("Payment is less than cost.")
 
