@@ -22,7 +22,17 @@ DENOMINATIONS = [
 
 
 def calculate_change(cost: float, payment: float) -> dict:
-    if cost < 0 or payment < 0:
+    try:
+        cost = float(cost)
+        payment = float(payment)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Cost and payment must be numeric.") from exc
+
+    if cost != cost or payment != payment:  # NaN check
+        raise ValueError("Cost and payment must be valid numbers.")
+    if cost == float("inf") or payment == float("inf"):
+        raise ValueError("Cost and payment must be finite.")
+    if not (cost >= 0 and payment >= 0):
         raise ValueError("Cost and payment must be non-negative.")
     if payment < cost:
         raise ValueError("Payment is less than cost.")
